@@ -1,20 +1,28 @@
 ## IMI configuration file
 ## Documentation @ https://imi.readthedocs.io/en/latest/getting-started/imi-config-file.html
 
+## Matt Loman 2025/03/14: This config file is the one I am editing to work with stationary
+## measurements as observational input
+
 ## General
-RunName: "Test_Permian_1week"
-isAWS: true
+RunName: "Test_IMI_NY"
+isAWS: false
 UseSlurm: true
-SafeMode: true
+SafeMode: false
 S3Upload: false
 
 ## Period of interest
-StartDate: 20180501
-EndDate: 20180508
+StartDate: 20200501
+EndDate: 20200508
 SpinupMonths: 1
 
+## Use stationary observation data (true)? Or use TROPOMI data (false)?
+StationaryObs: true
+StationaryObsDir: ""
+
 ## Use blended TROPOMI+GOSAT data (true)? Or use operational TROPOMI data (false)?
-BlendedTROPOMI: false
+##   NOTE: StationaryObs must be turned off to use satellite data 
+BlendedTROPOMI: true
 
 ## Use observations over water? Set to false to filter out water observations
 UseWaterObs: false
@@ -39,10 +47,10 @@ RegionID: "NA"
 ## Region of interest
 ##   These lat/lon bounds are only used if CreateAutomaticRectilinearStateVectorFile: true
 ##   Otherwise lat/lon bounds are determined from StateVectorFile
-LonMin: -105
-LonMax: -103
-LatMin: 31
-LatMax: 33
+LonMin: -82.96875
+LonMax: -68.59375
+LatMin: 37.375
+LatMax: 47.875
 
 ## Kalman filter options
 KalmanMode: false
@@ -73,11 +81,11 @@ ForcedNativeResolutionElements:
   - [31.5, -104]
 EmissionRateFilter: 2500
 PlumeCountFilter: 50
-GroupByCountry: false
+GroupByCountry: true
 
 ## Custom state vector
-StateVectorFile: "/home/ubuntu/integrated_methane_inversion/resources/statevectors/StateVector.nc"
-ShapeFile: "/home/ubuntu/integrated_methane_inversion/resources/shapefiles/PermianBasin_Extent_201712.shp"
+StateVectorFile: "/path/to/StateVector.nc"
+ShapeFile: "/scratch/mloman/apriori/qgis/Boundaries/tl_2023_us_state/NYS_only.gpkg"
 
 ## Inversion
 ## Notes:
@@ -106,33 +114,38 @@ Met: "GEOSFP"
 ## Setup modules
 ##   Turn on/off different steps in setting up the inversion
 RunSetup: true
-SetupTemplateRundir: true
-SetupSpinupRun: false
+SetupTemplateRundir: false
+SetupSpinupRun: true
 SetupJacobianRuns: false
 SetupInversion: false
 SetupPosteriorRun: false
 
+## Use preexisting HEMCO prior emissions
+##   NOTE: DoHemcoPriorEmis must be set to true at least the first time to link to IMI
+UseExistingHemcoOutput: true
+ExistingHemcoOutputDir: "/scratch/mloman/gc/rundirs/hemco_standalone/3.9.2/hemco_NYregion_geosfp/OutputDir"
+
 ## Run modules
 ##   Turn on/off different steps in performing the inversion
-DoHemcoPriorEmis: true
-DoSpinup: false
+DoHemcoPriorEmis: false
+DoSpinup: true
 DoJacobian: false
 ReDoJacobian: false
-DoInversion: false
-DoPosterior: false
+DoInversion: true
+DoPosterior: true
 
 ## IMI preview
 ##   NOTE: RunSetup must be true to run preview
-DoPreview: true
+DoPreview: false
 DOFSThreshold: 0
 
 ## Resource allocation settings for slurm jobs
 RequestedCPUs: 8
-RequestedMemory: 10000
-InversionCPUs: 32
-InversionMemory: 32000
+RequestedMemory: 32000
+InversionCPUs: 24
+InversionMemory: 124000
 RequestedTime: "0-24:00"
-SchedulerPartition: "debug"
+SchedulerPartition: "atmos"
 
 ## Max number of simultaneous Jacobian runs from the job array (-1: no limit)
 MaxSimultaneousRuns: -1
@@ -188,31 +201,42 @@ AIRS: false
 ##------------------------------------------------------------------
 
 ## Path for IMI runs and output
-OutputPath: "/home/ubuntu/imi_output_dir"
+OutputPath: "/scratch/mloman/gc/imi-v2.0.0/OutputDir"
 
 ## Path to GEOS-Chem input data
-DataPath: "/home/ubuntu/ExtData"
+#DataPath: "/scratch/ltmurray_lab/data/input/gc//ExtData"
+DataPath: "/scratch/mloman/data/ExtData"
+
+## Path to TROPOMI Data    ## DataPathTROPOMI: "/scratch/ltmurray_lab/data/satellite/TROPOMI/CH4"
+DataPathTROPOMI: "/scratch/mloman/tropomi_blended/data"
 
 ## Conda environment file
-CondaFile: "/home/ubuntu/.bashrc"
+## See envs/README to create the Conda environment specified below
 CondaEnv: "imi_env"
+CondaFile: "/software/miniforge3/23.3.1-1/bin/activate base"
+#CondaFile: "${HOME}/.bashrc"
+
+## GEOS-Chem environment file (with fortran compiler, netcdf libraries, etc.)
+##   NOTE: Copy your own file in the envs/ directory within the IMI
+GEOSChemEnv: "envs/bluehive.gcclassic.intel.env"
 
 ## Download initial restart file from AWS S3?
-##  NOTE: Must have AWS CLI enabled
-RestartDownload: true
+##   NOTE: Must have AWS CLI enabled
+RestartDownload: false
 
 ## Path to initial GEOS-Chem restart file + prefix
 ##   ("YYYYMMDD_0000z.nc4" will be appended)
-RestartFilePrefix: "/home/ubuntu/ExtData/BoundaryConditions/v2024-06/GEOSChem.BoundaryConditions."
+RestartFilePrefix: "/scratch/mloman/gc/boundary-conditions-imi/v2023-06/GEOSChem.BoundaryConditions."
 
 ## Path to GEOS-Chem boundary condition files (for regional simulations)
 ## BCversion will be appended to the end of this path. ${BCpath}/${BCversion}
-BCpath: "/home/ubuntu/ExtData/BoundaryConditions"
-BCversion: "v2024-06"
+BCpath: "/scratch/mloman/gc/boundary-conditions-imi"
+BCversion: "v2023-06"
 
 ## Options to download missing GEOS-Chem input data from AWS S3
-HemcoPriorEmisDryRun: true
-SpinupDryrun: true
+##   NOTE: Must have AWS CLI enabled
+HemcoPriorEmisDryRun: false
+SpinupDryrun: false
 ProductionDryRun: true
-PosteriorDryRun: true
-BCdryrun: true
+PosteriorDryRun: false
+BCdryrun: false

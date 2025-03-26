@@ -303,6 +303,28 @@ def get_gc_lat_lon(gc_cache, start_date):
     gc_data.close()
     return gc_ll
 
+def get_gc_z(gc_cache, obstime, gc_ij):
+    """
+    get list of box center elevations for a given gc gridcell
+
+    Arguments
+        gc_cache    [str]   : path to gc data
+        obstime     [int]   : datetime of observation (unix epoch time)
+        gc_ij       [list]  : GC indices of coordinates of observation
+
+    Returns
+        output      [list]  : list of altitudes of GC box tops in gridcell
+    """
+    gc_z = []
+    date = pd.to_datetime(obstime, unit='s').strftime("%Y%m%d_%H")
+    file_species = f"GEOSChem.SpeciesConc.{date}00z.nc4"
+    filename = f"{gc_cache}/{file_species}"
+    with xr.open_dataset(filename) as gc_data:
+        bxheight = gc_data["Met_BXHEIGHT"].values[gc_ij[0],gc_ij[1],:]
+        tops = np.cumsum(bxheight) # elevations of top of box
+        bottoms = np.insert(tops[:-1], 0, 0) # elevations of bottom of box
+        gc_z = ((tops - bottoms ) / 2 ) + bottoms
+    return gc_z
 
 def merge_pressure_grids(p_sat, p_gc):
     """

@@ -13,6 +13,7 @@ from src.inversion_scripts.utils import (
 
 from src.inversion_scripts.operators.operator_utilities import (
     get_gc_lat_lon,
+    get_gc_z,
     read_all_geoschem,
     merge_pressure_grids,
     remap,
@@ -40,8 +41,8 @@ def apply_average_stationary_operator(
     Arguments
         filename       [str]        : obspack netcdf data file to read
         n_elements     [int]        : Number of state vector elements
-        gc_startdate   [datetime64] : First day of inversion period, for GEOS-Chem and TROPOMI
-        gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and TROPOMI
+        gc_startdate   [datetime64] : First day of inversion period, for GEOS-Chem and observations
+        gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and observations
         xlim           [float]      : Longitude bounds for simulation domain
         ylim           [float]      : Latitude bounds for simulation domain
         gc_cache       [str]        : Path to GEOS-Chem output data
@@ -59,19 +60,19 @@ def apply_average_stationary_operator(
                                           If build_jacobian=True, also include:
                                             - K      : Jacobian matrix
     """
-    # Read stationary data
-    STATIONARY = read_stationary(filename)
-    if STATIONARY == None:
+    # Read obspack data
+    OBSPACK = read_obspack(filename, gc_startdate, gc_enddate)
+    if OBSPACK == None:
         print(f"Skipping {filename} due to file processing issue.")
-        return STATIONARY
+        return OBSPACK
 
     obs_ind = filter_stationary(
-        STATIONARY, xlim, ylim, gc_startdate, gc_enddate
+        OBSPACK, xlim, ylim, gc_startdate, gc_enddate
     )
 
-    # Number of TROPOMI observations
+    # Number of observations
     n_obs = len(obs_ind[0])
-    print("Found", n_obs, "stationary observations.")
+    print("Found", n_obs, " observations.")
 
     # get the lat/lons of gc gridcells
     gc_lat_lon = get_gc_lat_lon(gc_cache, gc_startdate)
@@ -84,8 +85,8 @@ def apply_average_stationary_operator(
 
     # map obs into gridcells and average the observations
     # into each gridcell. Only returns gridcells containing observations
-    obs_mapped_to_gc = average_stationary_observations(
-        STATIONARY, gc_lat_lon, sat_ind, time_threshold
+    obs_mapped_to_gc = average_obspack_observations(
+        OBSPACK, gc_lat_lon, obs_ind, time_threshold, gc_cache
     )
     n_gridcells = len(obs_mapped_to_gc)
 
@@ -111,8 +112,8 @@ def apply_average_stationary_operator(
         all_strdate, gc_cache, n_elements, config, build_jacobian
     )
 
-    # Initialize array with n_gridcells rows and 5 columns. Columns are
-    # observed CH4, GEOSChem CH4, longitude, latitude, observation counts
+    # Initialize array with n_gridcells rows and 6 columns. Columns are
+    # observed CH4, GEOSChem CH4, longitude, latitude, GEOSChem pressure, observation counts
     obs_GC = np.zeros([n_gridcells, 5], dtype=np.float32)
     obs_GC.fill(np.nan)
 
@@ -286,7 +287,6 @@ def apply_average_stationary_operator(
 
 def apply_stationary_operator(
     filename,
-#    BlendedTROPOMI,
     n_elements,
     gc_startdate,
     gc_enddate,
@@ -296,14 +296,12 @@ def apply_stationary_operator(
     build_jacobian,
     period_i,
     config,
-#    use_water_obs=False,
 ):
     """
     Apply the observation operator to map GEOS-Chem methane data to stationary observation space.
 
     Arguments
         filename       [str]        : obspack netcdf data file to read
-       #  BlendedTROPOMI [bool]       : if True, use blended TROPOMI+GOSAT data
         n_elements     [int]        : Number of state vector elements
         gc_startdate   [datetime64] : First day of inversion period, for GEOS-Chem and TROPOMI
         gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and TROPOMI
@@ -313,7 +311,6 @@ def apply_stationary_operator(
         build_jacobian [log]        : Are we trying to map GEOS-Chem sensitivities to TROPOMI observation space?
         period_i       [int]        : kalman filter period
         config         [dict]       : dict of the config file
-       #  use_water_obs  [bool]       : if True, use observations over water
 
     Returns
         output         [dict]       : Dictionary with one or two fields:
@@ -326,14 +323,14 @@ def apply_stationary_operator(
                                                         - K      : Jacobian matrix
     """
 
-    # Read stationary data
-    STATIONARY = read_stationary(filename)
-    if STATIONARY == None:
+    # Read observation data
+    OBSPACK = read_stationary(filename)
+    if OBSPACK == None:
         print(f"Skipping {filename} due to file processing issue.")
-        return STATIONARY
+        return OBSPACK
 
     obs_ind = filter_stationary(
-        STATIONARY, xlim, ylim, gc_startdate, gc_enddate
+        OBSPACK, xlim, ylim, gc_startdate, gc_enddate
     )
 
     # Number of TROPOMI observations
@@ -574,11 +571,11 @@ def apply_stationary_operator(
     return output
 
 
-def read_stationary(filename):
+def read_obspack(filename):
     """
-    Read stationary data and save important variables to dictionary.
+    Read obspack data and save important variables to dictionary.
     Arguments
-        filename [str]  : Blended obspack netcdf data file to read
+        filename [str]  : ObsPack netcdf data file to read
     Returns
         dat      [dict] : Dictionary of important variables from stationary data:
                             - CH4
@@ -598,7 +595,6 @@ def read_stationary(filename):
 
         # Extract data from netCDF file to our dictionary
         with xr.open_dataset(filename) as obs_data:
-
             dat["methane"] = obs_data["value"].values[:]
             dat["longitude"] = obs_data["longitude"].values[:]
             dat["latitude"] = obs_data["latitude"].values[:]
@@ -612,7 +608,7 @@ def read_stationary(filename):
             )
 
         # Add an axis here to mimic the (scanline, groundpixel) format of operational TROPOMI data
-        # This is so the observational data will (hopefully) be compatible with the TROPOMI operators
+        # This is so the blended data will be compatible with the TROPOMI operators
         for key in dat.keys():
             dat[key] = np.expand_dims(dat[key], axis=0)
 
@@ -623,15 +619,16 @@ def read_stationary(filename):
     return dat
 
 
-def average_stationary_observations(STATIONARY, gc_lat_lon, obs_ind, time_threshold):
+def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, gc_cache):
     """
-    Map stationary observations into appropriate gc gridcells. Then average all
+    Map observations into appropriate gc gridcells. Then average all
     observations within a gridcell for processing.
 
     Arguments
-        STATIONARY     [dict]   : Dict of stationary observation data
+        OBSPACK        [dict]   : Dict of observation data
         gc_lat_lon     [list]   : list of dictionaries containing gc gridcell info
         obs_ind        [int]    : index list of stationary data that passes filters
+        gc_cache       [str]    : Path to GEOS-Chem output data
 
     Returns
         output         [dict[]]   : flat list of dictionaries the following fields:
@@ -641,7 +638,7 @@ def average_stationary_observations(STATIONARY, gc_lat_lon, obs_ind, time_thresh
                                     - jGC                 : latitude index value
                                     - lat_obs             : averaged observation latitude
                                     - lon_obs             : averaged observation longitude
-                                    - z_obs               : averaged altitude for observation
+                                    - lev_obs             : list of GC levels with observations
                                     - time                : averaged time
                                     - methane             : averaged methane
                                     - observation_count   : number of observations averaged in cell
@@ -660,31 +657,31 @@ def average_stationary_observations(STATIONARY, gc_lat_lon, obs_ind, time_thresh
 
         # Find GEOS-Chem lats & lons closest to the observation coordinates
         
-        iGC = nearest_loc(STATIONARY["longitude"][iObs, jObs, :], gc_lons, tolerance=max(dlon, 0.5))
-        jGC = nearest_loc(STATIONARY["latitude"][iObs, jObs, :], gc_lats, tolerance=max(dlat, 0.5))
+        iGC = nearest_loc(OBSPACK["longitude"][iObs, jObs, :], gc_lons, tolerance=max(dlon, 0.5))
+        jGC = nearest_loc(OBSPACK["latitude"][iObs, jObs, :], gc_lats, tolerance=max(dlat, 0.5))
 
         # If the tolerance in nearest_loc() is not satisfied, skip the observation
         # if np.nan in corners_lon_index + corners_lat_index:
         if np.nan in iGC + jGC:
             continue
 
-        # Get lat/lon indexes and coordinates of GEOS-Chem grid cells closest to the TROPOMI corners
-        # ij_GC = [(x, y) for x in set(corners_lon_index) for y in set(corners_lat_index)]
-        gc_coords = [(gc_lons[iGC], gc_lats[jGC])
+        # Get lat/lon indexes and coordinates of GEOS-Chem grid cells closest to the observation coords
+        gc_coords = [(gc_lons[iGC], gc_lats[jGC])]
+
+        # Grab time only once
+        time_obs = OBSPACK["time"][iObs, jObs]
 
         # Add obs info to gridcell_dicts
-        gridcell_dict = gridcell_dicts[i_GC][j_GC]
-        gridcell_dict["lat_obs"].append(STATIONARY["latitude"][iObs, jObs])
-        gridcell_dict["lon_obs"].append(STATIONARY["longitude"][iObs, jObs])
-        gridcell_dict["z_obs"].append(STATIONARY["altitude"][iObs, jObs])
-        gridcell_dict[
-	    "time"
-	].append(  # convert times to epoch time to make taking the mean easier
-	    int(pd.to_datetime(str(STATIONARY["time"][iObs, jObs])).strftime("%s"))
-	)
+        gridcell_dict = gridcell_dicts[iGC][jGC]
+        gridcell_dict["lat_obs"].append(OBSPACK["latitude"][iObs, jObs])
+        gridcell_dict["lon_obs"].append(OBSPACK["longitude"][iObs, jObs])
+        gridcell_dict["lev_obs"].append(  # convert elevations to GC level
+            np.argmin(abs(get_gc_z(gc_cache, time_obs, [iGC, jGC]) - OBSPACK["elevation"][iObs, jObs]))
+        )
+        gridcell_dict["time"].append(time_obs) # obspack times already in unix epoch format
         gridcell_dict["methane"].append(
-	    STATIONARY["methane"][iObs, jObs]
-	)  # Actual stationary methane observation
+            OBSPACK["methane"][iObs, jObs]
+        )  # Actual methane observation
         # increment the observation count
         gridcell_dict["observation_count"] += 1
 
@@ -708,8 +705,8 @@ def average_stationary_observations(STATIONARY, gc_lat_lon, obs_ind, time_thresh
             datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"])))
         )
         gridcell_dict["time"] = get_strdate(time, time_threshold)
-        # for multi-dimensional arrays, we only take the average across the 0 axis
-        gridcell_dict["z_obs"] = np.average(
+        # for level just return unique values along 0 axis
+        gridcell_dict["lev_obs"] = np.unique(
             gridcell_dict["z_obs"],
             axis=0,
         )

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#SBATCH -N 1
-#SBATCH -c 1
-#SBATCH --mem=2000
-#SBATCH -o "imi_output.log"
+#SBATCH -c 4           # number of processors
+#SBATCH -t 24:00:00     # max time
+#SBATCH --mem=32GB         # RAM
+#SBATCH -o imi_output.log   # output to imi_output.log
 
 # This script will run the Integrated Methane Inversion (IMI) with GEOS-Chem.
 # For documentation, see https://imi.readthedocs.io.
@@ -89,6 +89,12 @@ RunDirs="${OutputPath}/${RunName}"
 ##=======================================================================
 ## Standard settings
 ##=======================================================================
+
+# remove HEMCO prior folder if DoHemcoPriorEmis==T
+if ([ -d "${RunDirs}/hemco_prior_emis" ] && "$DoHemcoPriorEmis"); then
+   printf "\n Overwriting existing HEMCO prior emissions."
+   rm -r ${RunDirs}/hemco_prior_emis
+fi
 
 # In safe mode check whether selected options will overwrite existing files
 if "$SafeMode"; then
