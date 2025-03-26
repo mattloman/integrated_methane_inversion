@@ -83,7 +83,7 @@ class PointSources:
 
     def _merge_dataframes(self):
         merged_df = pd.concat([s.gdf.copy() for s in self.datasources])
-        merged_df["time"] = pd.to_datetime(merged_df["time"], utc=True)
+        merged_df["time"] = pd.to_datetime(merged_df["time"], utc=True, format='ISO8601')
         return merged_df
 
     def _grid_datasource(self, datasource):
@@ -372,7 +372,7 @@ class PlumeObserver:
                 infile = f"{basedir}/{self.myname}_plumes/plumes.geojson"
             try:
                 gdf = gpd.read_file(infile)
-                gdf["time"] = pd.to_datetime(gdf["time"])
+                gdf["time"] = pd.to_datetime(gdf["time"], format='ISO8601')
                 self.gdf = gdf
             except:
                 msg = f"Cannot open cached file at {infile}, fetching new data."
@@ -507,7 +507,7 @@ class SRON(PlumeObserver):
             axis=1,
         )
 
-        gdf["time"] = pd.to_datetime(gdf["date"] + "T" + gdf["time_UTC"])
+        gdf["time"] = pd.to_datetime(gdf["date"] + "T" + gdf["time_UTC"], format='ISO8601')
         gdf["instrument"] = "TROPOMI"
 
         # t/h to kg/hr
@@ -666,7 +666,7 @@ class CarbonMapper(PlumeObserver):
             axis=1,
         )[keepv]
 
-        gdf["time"] = pd.to_datetime(gdf["time"])
+        gdf["time"] = pd.to_datetime(gdf["time"], format='ISO8601')
         gdf["datasource"] = self.myname
 
         # is a geodataframe with points as geometry

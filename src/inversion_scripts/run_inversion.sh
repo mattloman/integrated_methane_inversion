@@ -1,6 +1,11 @@
 #!/bin/bash
 
-#SBATCH -N 1
+#SBATCH -c 4           # number of processors
+#SBATCH -p atmos,standard,interactive        # partition
+#SBATCH --mem=32GB         # RAM
+#SBATCH -C E52695v4     # ensure that it's running on a v4 node
+#SBATCH --mail-user=mloman@ur.rochester.edu
+#SBATCH --mail-type=END
 #SBATCH -o run_inversion_%j.out
 
 ##=======================================================================

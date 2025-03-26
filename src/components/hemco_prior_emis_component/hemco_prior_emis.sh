@@ -17,6 +17,19 @@ run_hemco_prior_emis() {
         exit 9999
     fi
 
+    if "$UseExistingHemcoOutput"; then
+        printf "\nUsing existing HEMCO standalone output.\n"
+        printf "\nCreating directory ${RunDirs}/${HEMCOdir}\n"
+        mkdir ${RunDirs}/${HEMCOdir}
+	ln -s ${ExistingHemcoOutputDir} ${RunDirs}/${HEMCOdir}/OutputDir
+
+        pushd ${RunDirs}/${HEMCOdir}/OutputDir
+        for file in HEMCO_sa_diagnostics*.nc; do
+            exclude_soil_sink $file $file
+        done       
+        popd
+    else
+
     ### Perform dry run if requested
     if "$HemcoPriorEmisDryRun"; then
         pushd ${RunDirs}/template_run
@@ -129,6 +142,8 @@ fi' runHEMCO.sh
 
     printf "\n=== DONE GENERATING PRIOR EMISSIONS WITH HEMCO STANDALONE ===\n"
     hemco_prior_emis_end=$(date +%s)
+
+    fi
 }
 
 # Description: Run HEMCO standalone simulation

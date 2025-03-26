@@ -43,6 +43,7 @@ def read_geoschem(date, gc_cache, n_elements, config, build_jacobian=False):
                                     - Latitude
                                     - Longitude
                                     - PEDGE
+                                    - BXHEIGHT
     """
 
     # Assemble file paths to GEOS-Chem output collections for input data
@@ -57,6 +58,8 @@ def read_geoschem(date, gc_cache, n_elements, config, build_jacobian=False):
     CH4 = gc_data["SpeciesConcVV_CH4"].values[0, :, :, :]
     CH4 = CH4 * 1e9  # Convert to ppb
     CH4 = np.einsum("lij->jil", CH4)
+    BXHEIGHT = gc_data[Met_BXHEIGHT].values[0, :, :, :]
+    BXHEIGHT = np.einsum("lij->jil", BXHEIGHT)
     gc_data.close()
 
     # Read PEDGE from the LevelEdgeDiags collection
@@ -71,6 +74,7 @@ def read_geoschem(date, gc_cache, n_elements, config, build_jacobian=False):
     dat["lon"] = LON
     dat["lat"] = LAT
     dat["PEDGE"] = PEDGE
+    dat["BXHEIGHT"] = BXHEIGHT
     dat["CH4"] = CH4
 
     # If need to construct Jacobian, read sensitivity data from GEOS-Chem perturbation simulations
@@ -137,6 +141,9 @@ def read_geoschem(date, gc_cache, n_elements, config, build_jacobian=False):
             concat_tracers(k, gc_date, config, v, n_elements)
             for k, v in pert_simulations_dict.items()
         ]
+
+        ds_all = [ds.load() for ds in ds_all]
+
         ds_sensi = xr.concat(ds_all, "element")
         ds_sensi.load()
 

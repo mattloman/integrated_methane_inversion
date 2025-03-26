@@ -30,8 +30,13 @@ run_preview() {
     config_path=${InversionPath}/${ConfigFile}
     state_vector_path=${RunDirs}/StateVector.nc
     preview_dir=${RunDirs}/${runDir}
-    tropomi_cache=${RunDirs}/satellite_data
     preview_file=${InversionPath}/src/inversion_scripts/imi_preview.py
+
+    if "$StationaryObs"; then
+        obs_cache=${StationaryObsDir}
+    else
+        obs_cache=${RunDirs}/satellite_data
+    fi
 
     # Run preview script
     # If running end to end script with sbatch then use
@@ -44,15 +49,15 @@ run_preview() {
             -c $RequestedCPUs \
             -t $RequestedTime \
             -p $SchedulerPartition \
-            -o imi_output.tmp \
-            -W $preview_file $InversionPath $ConfigPath $state_vector_path $preview_dir $tropomi_cache
+	    -o imi_output.tmp \
+            -W $preview_file $InversionPath $ConfigPath $state_vector_path $preview_dir $obs_cache
         wait
         cat imi_output.tmp >>${InversionPath}/imi_output.log
         rm imi_output.tmp
         # check for any errors
         [ ! -f ".preview_error_status.txt" ] || imi_failed $LINENO
     else
-        python $preview_file $InversionPath $ConfigPath $state_vector_path $preview_dir $tropomi_cache
+        python $preview_file $InversionPath $ConfigPath $state_vector_path $preview_dir $obs_cache
     fi
     printf "\n=== DONE RUNNING IMI PREVIEW ===\n"
 

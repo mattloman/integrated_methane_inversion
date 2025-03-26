@@ -54,6 +54,7 @@ sed -i -e "s|'CH4',|#'CH4',|g" \
     -e "s|Restart.duration:           'End',|Restart.duration:           '00000001 000000',|g" \
     -e "s|00000100 000000|00000000 010000|g" \
     -e "s|time-averaged|instantaneous|g" \
+    -e "s|###'SpeciesConcMND_?ALL?           ',|'Met_BXHEIGHT                      ',|g" \
     -e "s|Met_CMFMC|Met_PEDGE|g" \
     -e "s|#'BoundaryConditions',|'BoundaryConditions',|g" \
     -e "s|'Met_AD                        ',|'Met_AIRVOL                    ',|g" HISTORY.rc

@@ -13,6 +13,10 @@ from src.inversion_scripts.operators.TROPOMI_operator import (
     apply_average_tropomi_operator,
     apply_tropomi_operator,
 )
+from src.inversion_scripts.operators.stationary_operator import (
+    apply_average_stationary_operator,
+    apply_stationary_operator,
+) 
 from joblib import Parallel, delayed
 
 
@@ -63,6 +67,32 @@ def apply_operator(operator, params, config):
             config,
             params["use_water_obs"],
         )
+    elif operator == "stationary_average":
+        return apply_average_stationary_operator(
+            params["filename"],
+            params["n_elements"],
+            params["gc_startdate"],
+            params["gc_enddate"],
+            params["xlim"],
+            params["ylim"],
+            params["gc_cache"],
+            params["build_jacobian"],
+            params["period_i"],
+            config,
+        )
+    elif operator == "stationary":
+        return apply_average_stationary_operator(
+            params["filename"],
+            params["n_elements"],
+            params["gc_startdate"],
+            params["gc_enddate"],
+            params["xlim"],
+            params["ylim"],
+            params["gc_cache"],
+            params["build_jacobian"],
+            params["period_i"],
+            config,
+        ) 
     else:
         raise ValueError("Error: invalid operator selected.")
 
@@ -77,13 +107,14 @@ if __name__ == "__main__":
     latmin = float(sys.argv[6])
     latmax = float(sys.argv[7])
     n_elements = int(sys.argv[8])
-    tropomi_cache = sys.argv[9]
-    BlendedTROPOMI = sys.argv[10].lower() == "true"
-    use_water_obs = sys.argv[11].lower() == "true"
-    isPost = sys.argv[12]
-    period_i = int(sys.argv[13])
-    build_jacobian = sys.argv[14]
-    viz_prior = sys.argv[15]
+    obs_cache = sys.argv[9]
+    StationaryObs = sys.argv[10].lower() == "true"
+    BlendedTROPOMI = sys.argv[11].lower() == "true"
+    use_water_obs = sys.argv[12].lower() == "true"
+    isPost = sys.argv[13]
+    period_i = int(sys.argv[14])
+    build_jacobian = sys.argv[15]
+    viz_prior = sys.argv[16]
 
     # Reformat start and end days for datetime in configuration
     start = f"{startday[0:4]}-{startday[4:6]}-{startday[6:8]} 00:00:00"
@@ -121,9 +152,9 @@ if __name__ == "__main__":
     print("Start:", start)
     print("End:", end)
 
-    # Get TROPOMI data filenames for the desired date range
-    allfiles = glob.glob(f"{tropomi_cache}/*.nc")
-    sat_files = []
+    # Get observation data filenames for the desired date range
+    allfiles = glob.glob(f"{obs_cache}/*.nc")
+    obs_files = []
     for index in range(len(allfiles)):
         filename = allfiles[index]
         shortname = re.split(r"\/", filename)[-1]
@@ -132,8 +163,8 @@ if __name__ == "__main__":
         strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
         if (strdate >= gc_startdate) and (strdate <= gc_enddate):
             sat_files.append(filename)
-    sat_files.sort()
-    print("Found", len(sat_files), "TROPOMI data files.")
+    obs_files.sort()
+    print("Found", len(obs_files), "observation data files.")
 
     # Map GEOS-Chem to TROPOMI observation space
     # Also return Jacobian matrix if build_jacobian=True
@@ -145,57 +176,94 @@ if __name__ == "__main__":
         print(shortname)
         date = re.split(r"\.", shortname)[0]
 
-        # If not yet processed, run apply_average_tropomi_operator()
+        # If not yet processed, apply average operator
         if not os.path.isfile(f"{outputdir}/{date}_GCtoTROPOMI.pkl"):
-            print("Applying TROPOMI operator...")
+            print("Applying observation operator...")
 
-            output = apply_operator(
-                "TROPOMI_average",
-                {
-                    "filename": filename,
-                    "BlendedTROPOMI": BlendedTROPOMI,
-                    "n_elements": n_elements,
-                    "gc_startdate": gc_startdate,
-                    "gc_enddate": gc_enddate,
-                    "xlim": xlim,
-                    "ylim": ylim,
-                    "gc_cache": gc_cache,
-                    "build_jacobian": build_jacobian,
-                    "period_i": period_i,
-                    "use_water_obs": use_water_obs,
-                },
-                config,
-            )
+            if StationaryObs:
+                output = apply_operator(
+                    "stationary_average",
+                    {
+                        "filename": filename,
+                        "n_elements": n_elements,
+                        "gc_startdate": gc_startdate,
+                        "gc_enddate": gc_enddate,
+                        "xlim": xlim,
+                        "ylim": ylim,
+                        "gc_cache": gc_cache,
+                        "build_jacobian": build_jacobian,
+                        "period_i": period_i,
+                    },
+                    config,
+                )
 
-            # we also save out the unaveraged tropomi operator for visualization purposes
-            viz_output = apply_operator(
-                "TROPOMI",
-                {
-                    "filename": filename,
-                    "BlendedTROPOMI": BlendedTROPOMI,
-                    "n_elements": n_elements,
-                    "gc_startdate": gc_startdate,
-                    "gc_enddate": gc_enddate,
-                    "xlim": xlim,
-                    "ylim": ylim,
-                    "gc_cache": gc_cache,
-                    "build_jacobian": False,
-                    "period_i": period_i,
-                    "use_water_obs": use_water_obs,
-                },
-                config,
-            )
+                # we also save out the unaveraged operator for visualization purposes
+                viz_output = apply_operator(
+                    "stationary",
+                    {
+                        "filename": filename,
+                        "n_elements": n_elements,
+                        "gc_startdate": gc_startdate,
+                        "gc_enddate": gc_enddate,
+                        "xlim": xlim,
+                        "ylim": ylim,
+                        "gc_cache": gc_cache,
+                        "build_jacobian": False,
+                        "period_i": period_i,
+                    },
+                    config,
+                )
 
-            if output == None:
-                return 0
+                if output == None:
+                    return 0
+            else:
+                output = apply_operator(
+                    "TROPOMI_average",
+                    {
+                        "filename": filename,
+                        "BlendedTROPOMI": BlendedTROPOMI,
+                        "n_elements": n_elements,
+                        "gc_startdate": gc_startdate,
+                        "gc_enddate": gc_enddate,
+                        "xlim": xlim,
+                        "ylim": ylim,
+                        "gc_cache": gc_cache,
+                        "build_jacobian": build_jacobian,
+                        "period_i": period_i,
+                        "use_water_obs": use_water_obs,
+                    },
+                    config,
+                )
+
+                # we also save out the unaveraged tropomi operator for visualization purposes
+                viz_output = apply_operator(
+                    "TROPOMI",
+                    {
+                        "filename": filename,
+                        "BlendedTROPOMI": BlendedTROPOMI,
+                        "n_elements": n_elements,
+                        "gc_startdate": gc_startdate,
+                        "gc_enddate": gc_enddate,
+                        "xlim": xlim,
+                        "ylim": ylim,
+                        "gc_cache": gc_cache,
+                        "build_jacobian": False,
+                        "period_i": period_i,
+                        "use_water_obs": use_water_obs,
+                    },
+                    config,
+                )
+
+                if output == None:
+                    return 0
         else:
             return 0
 
         if output["obs_GC"].shape[0] > 0:
             print("Saving .pkl file")
-            save_obj(output, f"{outputdir}/{date}_GCtoTROPOMI.pkl")
-            save_obj(viz_output, f"{vizdir}/{date}_GCtoTROPOMI.pkl")
+            save_obj(output, f"{outputdir}/{date}_GCtoObs.pkl")
+            save_obj(viz_output, f"{vizdir}/{date}_GCtoObs.pkl")
         return 0
 
-    results = Parallel(n_jobs=-1)(delayed(process)(filename) for filename in sat_files)
+    results = Parallel(n_jobs=-1, verbose=10)(delayed(process)(filename) for filename in obs_files)
     print(f"Wrote files to {outputdir}")

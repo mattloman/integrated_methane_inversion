@@ -6,17 +6,19 @@
 # using the RemoveGlobalMet option.
 
 ##############################################################################
-# Custom to Harvard FAS RC cluster:
-#SBATCH -n 1
-#SBATCH -N 1
-#SBATCH -t 0-6:00
-#SBATCH -p huce_cascade
-#SBATCH --mem=2000
+# Custom to UR Bluehive cluster:
+#SBATCH -c 4           # number of processors
+#SBATCH -p atmos,standard,interactive        # partition
+#SBATCH --mem=32GB         # RAM
+#SBATCH -C E52695v4     # ensure that it's running on a v4 node
+#SBATCH --mail-user=mloman@ur.rochester.edu
 #SBATCH --mail-type=END
 
 # Load modules for CDO
-module load intel/17.0.4-fasrc01
-module load cdo/1.9.4-fasrc02
+#module load intel/17.0.4-fasrc01
+#module load cdo/1.9.4-fasrc02
+module load intel/2017.5
+module load cdo-1.9.8-intel-17.0.5-ulmqycg
 ##############################################################################
 
 ##############################################################################

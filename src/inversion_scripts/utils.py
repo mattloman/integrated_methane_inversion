@@ -338,6 +338,24 @@ def plot_time_series(
     plt.show()
 
 
+def filter_stationary(stationary_data, xlim, ylim, startdate, enddate):
+    """
+    Description:
+        Filter out any data outside lat/lon/time bounds.
+    Returns:
+        numpy array with indices for filtered stationary data.
+    """
+    valid_idx = (
+        (stationary_data["longitude"] > xlim[0])
+        & (stationary_data["longitude"] < xlim[1])
+        & (stationary_data["latitude"] > ylim[0])
+        & (stationary_data["latitude"] < ylim[1])
+        & (stationary_data["time"] >= startdate)
+        & (stationary_data["time"] <= enddate)
+    )
+
+    return np.where(valid_idx)
+
 def filter_tropomi(tropomi_data, xlim, ylim, startdate, enddate, use_water_obs=False):
     """
     Description:

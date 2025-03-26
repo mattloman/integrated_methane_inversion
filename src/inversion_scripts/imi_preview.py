@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python 
 # -*- coding: utf-8 -*-
 
 # SBATCH -N 1
@@ -7,6 +7,7 @@ import os
 import sys
 import yaml
 import warnings
+import traceback
 import datetime
 import numpy as np
 import xarray as xr
@@ -25,6 +26,7 @@ from src.inversion_scripts.utils import (
     plot_field,
     filter_tropomi,
     filter_blended,
+    filter_stationary,
     calculate_area_in_km,
     calculate_superobservation_error,
     get_mean_emissions,
@@ -34,6 +36,9 @@ from joblib import Parallel, delayed
 from src.inversion_scripts.operators.TROPOMI_operator import (
     read_tropomi,
     read_blended,
+)
+from src.inversion_script.operators.stationary_operator import (
+    read_stationary,
 )
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -102,14 +107,60 @@ def get_TROPOMI_data(
 
     return tropomi_data
 
+def get_stationary_data(
+    file_path, xlim, ylim, startdate_np64, enddate_np64
+):
+    """
+    Returns a dict with the lat, lon, and xch4 observations
+    extracted from the given observation file. Filters are applied to remove
+    unsuitable observations
+    Args:
+        file_path : string
+            path to the observation file
+        xlim: list
+            longitudinal bounds for region of interest
+        ylim: list
+            latitudinal bounds for region of interest
+        startdate_np64: datetime64
+            start date for time period of interest
+        enddate_np64: datetime64
+            end date for time period of interest
+    Returns:
+         obs_data: dict
+            dictionary of the extracted values
+    """
+    # observation data dictionary
+    obs_data = {"lat": [], "lon": [], "xch4": [], "time": []}
+   
+    # Load the observation data
+    STATIONARY = read_stationary(file_path)
+    if STATIONARY == None:
+        print(f"Skipping {file_path} due to error")
+        return STATIONARY
+    
+    obs_ind = filter_stationary(
+        STATIONARY, xlim, ylim, startdate_np64, enddate_np64
+    )
+
+    # Loop over observations and archive
+    num_obs = len(obs_ind[0])
+    for k in range(num_obs):
+        lat_idx = obs_ind[0][k]
+        lon_idx = obs_ind[1][k]
+        obs_data["lat"].append(STATIONARY["latitude"][lat_idx, lon_idx])
+        obs_data["lon"].append(STATIONARY["longitude"][lat_idx, lon_idx])
+        obs_data["xch4"].append(STATIONARY["methane"][lat_idx, lon_idx])
+        obs_data["time"].append(STATIONARY["time"][lat_idx, lon_idx])
+
+    return obs_data
 
 def imi_preview(
-    inversion_path, config_path, state_vector_path, preview_dir, tropomi_cache
+    inversion_path, config_path, state_vector_path, preview_dir, obs_cache
 ):
     """
     Function to perform preview
     Requires preview simulation to have been run already (to generate HEMCO diags)
-    Requires TROPOMI data to have been downloaded already
+    Requires observational data to have been downloaded already
     """
 
     # ----------------------------------
@@ -136,7 +187,7 @@ def imi_preview(
         config,
         state_vector_path,
         preview_dir,
-        tropomi_cache,
+        obs_cache,
         preview=True,
         kf_index=None,
     )
@@ -259,6 +310,14 @@ def imi_preview(
     fig = plt.figure(figsize=(10, 8))
     ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
     xch4_min, xch4_max = dynamic_range(ds["xch4"].values)
+
+    if config["StationaryObs"]:
+        plottitle = "Observed $X_{CH4}$"
+        plotcbar = "Observed mixing ratio (ppbv)"
+    else:
+        plottitle = "TROPOMI $X_{CH4}$"
+        plotcbar = "Column mixing ratio (ppbv)"
+
     plot_field(
         ax,
         ds["xch4"],
@@ -268,8 +327,8 @@ def imi_preview(
         vmax=xch4_max,
         lon_bounds=None,
         lat_bounds=None,
-        title="TROPOMI $X_{CH4}$",
-        cbar_label="Column mixing ratio (ppb)",
+        title=plottitle,
+        cbar_label=plotcbar,
         mask=mask if config["isRegional"] else None,
         only_ROI=False,
     )
@@ -279,27 +338,28 @@ def imi_preview(
         bbox_inches="tight",
         dpi=150,
     )
-
-    # Plot albedo
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
-    plot_field(
-        ax,
-        ds["swir_albedo"],
-        cmap="magma",
-        plot_type="pcolormesh",
-        vmin=0,
-        vmax=0.4,
-        lon_bounds=None,
-        lat_bounds=None,
-        title="SWIR Albedo",
-        cbar_label="Albedo",
-        mask=mask if config["isRegional"] else None,
-        only_ROI=False,
-    )
-    plt.savefig(
-        os.path.join(preview_dir, "preview_albedo.png"), bbox_inches="tight", dpi=150
-    )
+    
+    if not config["StationaryObs"]:
+        # Plot albedo
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
+        plot_field(
+            ax,
+            ds["swir_albedo"],
+            cmap="magma",
+            plot_type="pcolormesh",
+            vmin=0,
+            vmax=0.4,
+            lon_bounds=None,
+            lat_bounds=None,
+            title="SWIR Albedo",
+            cbar_label="Albedo",
+            mask=mask if config["isRegional"] else None,
+            only_ROI=False,
+        )
+        plt.savefig(
+            os.path.join(preview_dir, "preview_albedo.png"), bbox_inches="tight", dpi=150
+        )
 
     # Plot observation density
     fig = plt.figure(figsize=(10, 8))
@@ -401,7 +461,7 @@ def map_sensitivities_to_sv(sensitivities, sv, last_ROI_element):
 
 
 def estimate_averaging_kernel(
-    config, state_vector_path, preview_dir, tropomi_cache, preview=False, kf_index=None
+    config, state_vector_path, preview_dir, obs_cache, preview=False, kf_index=None
 ):
     """
     Estimates the averaging kernel sensitivities using prior emissions
@@ -421,11 +481,11 @@ def estimate_averaging_kernel(
         np.nanmax(state_vector_labels.values) - config["nBufferClusters"]
     )
 
-    # Whether to use observations over water?
-    use_water_obs = config["UseWaterObs"] if "UseWaterObs" in config.keys() else False
-
     # Define mask for ROI, to be used below
     mask = state_vector_labels <= last_ROI_element
+
+    # Whether to use observations over water?
+    use_water_obs = config["UseWaterObs"] if "UseWaterObs" in config.keys() else False
 
     # ----------------------------------
     # Total prior emissions
@@ -469,9 +529,9 @@ def estimate_averaging_kernel(
     # ----------------------------------
 
     # Paths to tropomi data files
-    tropomi_files = [f for f in os.listdir(tropomi_cache) if ".nc" in f]
-    tropomi_paths = [os.path.join(tropomi_cache, f) for f in tropomi_files]
-
+    obs_files = [f for f in os.listdir(obs_cache) if ".nc" in f]
+    obs_paths = [os.path.join(obs_cache, f) for f in obs_files]
+    
     # Latitude/longitude bounds of the inversion domain
     xlim = [float(state_vector.lon.min()), float(state_vector.lon.max())]
     ylim = [float(state_vector.lat.min()), float(state_vector.lat.max())]
@@ -485,18 +545,19 @@ def estimate_averaging_kernel(
         datetime.datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
         - datetime.timedelta(days=1)
     )
-
+    
     # Only consider tropomi files within date range (in case more are present)
-    tropomi_paths = [
+    obs_paths = [
         p
-        for p in tropomi_paths
+        for p in obs_paths
         if int(p.split("____")[1][0:8]) >= int(startday)
         and int(p.split("____")[1][0:8]) < int(endday)
     ]
-    tropomi_paths.sort()
+    obs_paths.sort()
 
-    # Use blended TROPOMI+GOSAT data or operational TROPOMI data?
-    BlendedTROPOMI = config["BlendedTROPOMI"]
+    if not config["StationaryObs"]:
+	# Use blended TROPOMI+GOSAT data or operational TROPOMI data?
+	BlendedTROPOMI = config["BlendedTROPOMI"]
 
     # Open tropomi files and filter data
     lat = []
@@ -505,37 +566,68 @@ def estimate_averaging_kernel(
     albedo = []
     trtime = []
 
-    # Read in and filter tropomi observations (uses parallel processing)
-    observation_dicts = Parallel(n_jobs=-1)(
-        delayed(get_TROPOMI_data)(
-            file_path,
-            BlendedTROPOMI,
-            xlim,
-            ylim,
-            startdate_np64,
-            enddate_np64,
-            use_water_obs,
+    if config["StationaryObs"]:
+        # Read in and filter stationary observations
+        observation_dicts = Parallel(n_jobs=-1)(
+            delayed(get_stationary_data)(
+                file_path,
+                xlim,
+                ylim,
+                startdate_np64,
+                enddate_np64,
+            )
+            for file_path in obs_paths
         )
-        for file_path in tropomi_paths
-    )
-    # Remove any problematic observation dicts (eg. corrupted data file)
-    observation_dicts = list(filter(None, observation_dicts))
 
-    for obs_dict in observation_dicts:
-        lat.extend(obs_dict["lat"])
-        lon.extend(obs_dict["lon"])
-        xch4.extend(obs_dict["xch4"])
-        albedo.extend(obs_dict["swir_albedo"])
-        trtime.extend(obs_dict["time"])
+        # Remove any problematic observation dicts (eg. corrupted data file)
+        observation_dicts = list(filter(None, observation_dicts))
 
-    # Assemble in dataframe
-    df = pd.DataFrame()
-    df["lat"] = lat
-    df["lon"] = lon
-    df["obs_count"] = np.ones(len(lat))
-    df["swir_albedo"] = albedo
-    df["xch4"] = xch4
-    df["time"] = trtime
+        for obs_dict in observation_dicts:
+            lat.extend(obs_dict["lat"])
+            lon.extend(obs_dict["lon"])
+            xch4.extend(obs_dict["xch4"])
+            trtime.extend(obs_dict["time"])
+
+        # Assemble in dataframe
+        df = pd.DataFrame()
+        df["lat"] = lat
+        df["lon"] = lon
+        df["obs_count"] = np.ones(len(lat))
+        df["xch4"] = xch4
+        df["time"] = trtime
+    else:
+	# Read in and filter tropomi observations (uses parallel processing)
+	observation_dicts = Parallel(n_jobs=-1)(
+	    delayed(get_TROPOMI_data)(
+		file_path,
+		BlendedTROPOMI,
+		xlim,
+		ylim,
+		startdate_np64,
+		enddate_np64,
+		use_water_obs,
+	    )
+	    for file_path in obs_paths
+	)
+	
+	# Remove any problematic observation dicts (eg. corrupted data file)
+	observation_dicts = list(filter(None, observation_dicts))
+
+	for obs_dict in observation_dicts:
+	    lat.extend(obs_dict["lat"])
+	    lon.extend(obs_dict["lon"])
+	    xch4.extend(obs_dict["xch4"])
+	    albedo.extend(obs_dict["swir_albedo"])
+	    trtime.extend(obs_dict["time"])
+
+	# Assemble in dataframe
+	df = pd.DataFrame()
+	df["lat"] = lat
+	df["lon"] = lon
+	df["obs_count"] = np.ones(len(lat))
+	df["swir_albedo"] = albedo
+	df["xch4"] = xch4
+	df["time"] = trtime
 
     # Set resolution specific variables
     # L_native = Rough length scale of native state vector element [m]
@@ -743,10 +835,10 @@ if __name__ == "__main__":
         config_path = sys.argv[2]
         state_vector_path = sys.argv[3]
         preview_dir = sys.argv[4]
-        tropomi_cache = sys.argv[5]
+        obs_cache = sys.argv[5]
 
         imi_preview(
-            inversion_path, config_path, state_vector_path, preview_dir, tropomi_cache
+            inversion_path, config_path, state_vector_path, preview_dir, obs_cache
         )
     except Exception as err:
         with open(".preview_error_status.txt", "w") as file1:
@@ -755,4 +847,5 @@ if __name__ == "__main__":
                 "This file is used to tell the controlling script that the imi_preview failed"
             )
         print(err)
+        print(traceback.format_exc())
         sys.exit(1)
