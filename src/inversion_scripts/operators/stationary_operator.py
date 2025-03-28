@@ -303,12 +303,12 @@ def apply_stationary_operator(
     Arguments
         filename       [str]        : obspack netcdf data file to read
         n_elements     [int]        : Number of state vector elements
-        gc_startdate   [datetime64] : First day of inversion period, for GEOS-Chem and TROPOMI
-        gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and TROPOMI
+        gc_startdate   [datetime64] : First day of inversion period, for GEOS-Chem and observations
+        gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and observations
         xlim           [float]      : Longitude bounds for simulation domain
         ylim           [float]      : Latitude bounds for simulation domain
         gc_cache       [str]        : Path to GEOS-Chem output data
-        build_jacobian [log]        : Are we trying to map GEOS-Chem sensitivities to TROPOMI observation space?
+        build_jacobian [log]        : Are we trying to map GEOS-Chem sensitivities to observation space?
         period_i       [int]        : kalman filter period
         config         [dict]       : dict of the config file
 
@@ -335,7 +335,6 @@ def apply_stationary_operator(
 
     # Number of TROPOMI observations
     n_obs = len(obs_ind[0])
-    # print("Found", n_obs, "TROPOMI observations.")
 
     # If need to build Jacobian from GEOS-Chem perturbation simulation sensitivity data:
     if build_jacobian:
@@ -352,12 +351,12 @@ def apply_stationary_operator(
     )
     time_threshold = f"{date_after_inversion}_00"
 
-    # For each TROPOMI observation
+    # For each observation
     for k in range(n_obs):
         # Get the date and hour
-        iSat = sat_ind[0][k]  # lat index
-        jSat = sat_ind[1][k]  # lon index
-        time = pd.to_datetime(str(TROPOMI["time"][iSat, jSat]))
+        iObs = obs_ind[0][k]  # lat index
+        jObs = obs_ind[1][k]  # lon index
+        time = pd.to_datetime(str(OBSPACK["time"][iObs, jObs]))
         strdate = get_strdate(time, time_threshold)
         all_strdate.append(strdate)
     all_strdate = list(set(all_strdate))
@@ -371,13 +370,13 @@ def apply_stationary_operator(
     obs_GC = np.zeros([n_obs, 6], dtype=np.float32)
     obs_GC.fill(np.nan)
 
-    # For each TROPOMI observation:
+    # For each observation:
     for k in range(n_obs):
 
         # Get GEOS-Chem data for the date of the observation:
-        iSat = sat_ind[0][k]
-        jSat = sat_ind[1][k]
-        p_sat = TROPOMI["pressures"][iSat, jSat, :]
+        iObs = obs_ind[0][k]
+        jObs = obs_ind[1][k]
+        p_obs = OBSPACK["pressures"][iSat, jSat, :]
         dry_air_subcolumns = TROPOMI["dry_air_subcolumns"][iSat, jSat, :]  # mol m-2
         apriori = TROPOMI["methane_profile_apriori"][iSat, jSat, :]  # mol m-2
         avkern = TROPOMI["column_AK"][iSat, jSat, :]
@@ -638,7 +637,7 @@ def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, g
                                     - jGC                 : latitude index value
                                     - lat_obs             : averaged observation latitude
                                     - lon_obs             : averaged observation longitude
-                                    - lev_obs             : list of GC levels with observations
+                                    - p_obs               : averaged observation pressure
                                     - time                : averaged time
                                     - methane             : averaged methane
                                     - observation_count   : number of observations averaged in cell
@@ -664,14 +663,19 @@ def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, g
         if np.nan in iGC + jGC:
             continue
 
+        # Grab obs info only once
+        time_obs = OBSPACK["time"][iObs, jObs]  # obspack times already in unix epoch format
+        lev_obs = get_gc_lev(gc_cache, time_obs, OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
+
         # Add obs info to gridcell_dicts
         gridcell_dict = gridcell_dicts[iGC][jGC]
         gridcell_dict["lat_obs"].append(OBSPACK["latitude"][iObs, jObs])
         gridcell_dict["lon_obs"].append(OBSPACK["longitude"][iObs, jObs])
         gridcell_dict["p_obs"].append(  # convert obs altitude to GC level and then to pressure
-            get_gc_p(gc_cache, OBSPACK["time"][iObs, jObs], OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
+            get_gc_p(gc_cache, time_obs, obs_lev, [iGC, jGC])
         )
-        gridcell_dict["time"].append(OBSPACK["time"][iObs, jObs]) # obspack times already in unix epoch format
+        gridcell_dict["lev_obs"].append(lev_obs)
+        gridcell_dict["time"].append(time_obs) 
         gridcell_dict["methane"].append(
             OBSPACK["methane"][iObs, jObs]
         )  # Actual methane observation
@@ -687,8 +691,11 @@ def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, g
         gridcell_dict["lat_obs"] = np.average(
             gridcell_dict["lat_obs"],
         )
-        gridcell_dict["lon_sat"] = np.average(
-            gridcell_dict["lon_sat"],
+        gridcell_dict["lon_obs"] = np.average(
+            gridcell_dict["lon_obs"],
+        )
+        gridcell_dict["p_obs"] = np.average(
+            gridcell_dict["p_obs"]
         )
         gridcell_dict["methane"] = np.average(
             gridcell_dict["methane"],
@@ -698,9 +705,10 @@ def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, g
             datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"])))
         )
         gridcell_dict["time"] = get_strdate(time, time_threshold)
+        
         # for level just return unique values along 0 axis
-        gridcell_dict["lev_obs"] = np.unique(
-            gridcell_dict["z_obs"],
-            axis=0,
-        )
+        # gridcell_dict["lev_obs"] = np.unique(
+        #     gridcell_dict["lev_obs"],
+        #     axis=0,
+        # )
     return gridcell_dicts
