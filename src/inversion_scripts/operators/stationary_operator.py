@@ -13,7 +13,7 @@ from src.inversion_scripts.utils import (
 
 from src.inversion_scripts.operators.operator_utilities import (
     get_gc_lat_lon,
-    get_gc_z,
+    get_gc_p,
     read_all_geoschem,
     merge_pressure_grids,
     remap,
@@ -114,14 +114,14 @@ def apply_average_stationary_operator(
 
     # Initialize array with n_gridcells rows and 6 columns. Columns are
     # observed CH4, GEOSChem CH4, longitude, latitude, GEOSChem pressure, observation counts
-    obs_GC = np.zeros([n_gridcells, 5], dtype=np.float32)
+    obs_GC = np.zeros([n_gridcells, 6], dtype=np.float32)
     obs_GC.fill(np.nan)
 
     # For each gridcell dict with TROPOMI obs:
     for i, gridcell_dict in enumerate(obs_mapped_to_gc):
 
         # Get GEOS-Chem data for the date of the observation:
-        p_sat = gridcell_dict["p_sat"]
+        p_obs = gridcell_dict["p_obs"]
         dry_air_subcolumns = gridcell_dict["dry_air_subcolumns"]  # mol m-2
         apriori = gridcell_dict["apriori"]  # mol m-2
         avkern = gridcell_dict["avkern"]
@@ -133,9 +133,9 @@ def apply_average_stationary_operator(
         # Get GEOS-Chem methane for the cell
         gc_CH4 = GEOSCHEM["CH4"][gridcell_dict["iGC"], gridcell_dict["jGC"], :]
         # Get merged GEOS-Chem/TROPOMI pressure grid for the cell
-        merged = merge_pressure_grids(p_sat, p_gc)
+        merged = merge_pressure_grids(p_obs, p_gc)
         # Remap GEOS-Chem methane to TROPOMI pressure levels
-        sat_CH4 = remap(
+        obs_CH4 = remap(
             gc_CH4,
             merged["data_type"],
             merged["p_merge"],
@@ -661,24 +661,17 @@ def average_obspack_observations(OBSPACK, gc_lat_lon, obs_ind, time_threshold, g
         jGC = nearest_loc(OBSPACK["latitude"][iObs, jObs, :], gc_lats, tolerance=max(dlat, 0.5))
 
         # If the tolerance in nearest_loc() is not satisfied, skip the observation
-        # if np.nan in corners_lon_index + corners_lat_index:
         if np.nan in iGC + jGC:
             continue
-
-        # Get lat/lon indexes and coordinates of GEOS-Chem grid cells closest to the observation coords
-        gc_coords = [(gc_lons[iGC], gc_lats[jGC])]
-
-        # Grab time only once
-        time_obs = OBSPACK["time"][iObs, jObs]
 
         # Add obs info to gridcell_dicts
         gridcell_dict = gridcell_dicts[iGC][jGC]
         gridcell_dict["lat_obs"].append(OBSPACK["latitude"][iObs, jObs])
         gridcell_dict["lon_obs"].append(OBSPACK["longitude"][iObs, jObs])
-        gridcell_dict["lev_obs"].append(  # convert elevations to GC level
-            np.argmin(abs(get_gc_z(gc_cache, time_obs, [iGC, jGC]) - OBSPACK["elevation"][iObs, jObs]))
+        gridcell_dict["p_obs"].append(  # convert obs altitude to GC level and then to pressure
+            get_gc_p(gc_cache, OBSPACK["time"][iObs, jObs], OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
         )
-        gridcell_dict["time"].append(time_obs) # obspack times already in unix epoch format
+        gridcell_dict["time"].append(OBSPACK["time"][iObs, jObs]) # obspack times already in unix epoch format
         gridcell_dict["methane"].append(
             OBSPACK["methane"][iObs, jObs]
         )  # Actual methane observation

@@ -52,9 +52,6 @@ setup_spinup() {
             -e 's/LevelEdgeDiags.mode:        '\''time-averaged/LevelEdgeDiags.mode:        '\''instantaneous/g' HISTORY.rc
     fi
 
-    # Put boxheight diagnostic output in SpeciesConc (can't go in LevelEdge because it's defined at grid center)
-    sed -i -e 's/###'\''SpeciesConcMND_?ALL?/'\''Met_BXHEIGHT        /g'
-
     # Create run script from template
     sed -e "s:namename:${SpinupName}:g" \
         -e "s:##:#:g" ch4_run.template >${SpinupName}.run

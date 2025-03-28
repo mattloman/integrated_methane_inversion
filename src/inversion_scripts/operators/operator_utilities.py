@@ -303,28 +303,42 @@ def get_gc_lat_lon(gc_cache, start_date):
     gc_data.close()
     return gc_ll
 
-def get_gc_z(gc_cache, obstime, gc_ij):
+def get_gc_p(gc_cache, obs_time, obs_alt, gc_ij):
     """
-    get list of box center elevations for a given gc gridcell
+    get GEOS-Chem box center pressure for a given gridcell and altitude
 
     Arguments
         gc_cache    [str]   : path to gc data
-        obstime     [int]   : datetime of observation (unix epoch time)
+        obs_time    [int]   : datetime of observation (unix epoch time)
+        obs_alt     [float] : altitude of observation (m)
         gc_ij       [list]  : GC indices of coordinates of observation
 
     Returns
         output      [list]  : list of altitudes of GC box tops in gridcell
     """
-    gc_z = []
-    date = pd.to_datetime(obstime, unit='s').strftime("%Y%m%d_%H")
-    file_species = f"GEOSChem.SpeciesConc.{date}00z.nc4"
-    filename = f"{gc_cache}/{file_species}"
-    with xr.open_dataset(filename) as gc_data:
-        bxheight = gc_data["Met_BXHEIGHT"].values[gc_ij[0],gc_ij[1],:]
-        tops = np.cumsum(bxheight) # elevations of top of box
-        bottoms = np.insert(tops[:-1], 0, 0) # elevations of bottom of box
-        gc_z = ((tops - bottoms ) / 2 ) + bottoms
-    return gc_z
+    gc_p = 0.0
+    p_s = 0.0
+    date = pd.to_datetime(obstime, unit='s')
+    file_height = f"GEOSChem.HeightDiag.{date.strftime('%Y%m%d')}_0000z.nc4"
+    file_edge = f"GEOSChem.LevelEdgeDiags.{date.strftime('%Y%m%d')}_0000z.nc4"
+
+    filename = f"{gc_cache}/{file_edge}"
+    with xr.open_dataset(filename) as gc_edge:
+        p_s = gc_edge["Met_PEDGE"].values[date.hour, 1, gc_ij[0], gc_ij[1]] # hPa
+
+    filename = f"{gc_cache}/{file_height}"
+    with xr.open_dataset(filename) as gc_height:
+        bxheight = gc_height["Met_BXHEIGHT"].values[date.hour, :, gc_ij[0], gc_ij[1]] # m
+        phis = gc_height["Met_PHIS"].values[date.hour, gc_ij[0], gc_ij[1]] # m
+        hyam = gc_height["hyam"].values[:]
+        hybm = gc_height["hybm"].values[:]
+        top_z = np.cumsum(bxheight) + phis # surface geopotential height + box tops height from surface
+        bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude
+        center_z = ((top_z - bottom_z ) / 2 ) + bottoms # box centers altitude
+        gc_ilev = np.argmin(abs(center_z - obs_alt))  # vertical level index of observation
+        gc_p = ( hyam[gc_ilev] * p_s ) + hybm[gc_ilev] # grid box midpoint pressure at level of observation
+
+    return gc_p
 
 def merge_pressure_grids(p_sat, p_gc):
     """

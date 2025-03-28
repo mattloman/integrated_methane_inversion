@@ -173,6 +173,17 @@ create_simulation_dir() {
                 -e 's/LevelEdgeDiags.duration:    00000100 000000/LevelEdgeDiags.duration:    00000001 000000/g' \
                 -e 's/LevelEdgeDiags.mode:        '\''time-averaged/LevelEdgeDiags.mode:        '\''instantaneous/g' HISTORY.rc
         fi
+        if "$StationaryObs"; then
+            # turn on and rename StateMet, grab only necessary fields
+            sed -i -e 's/#'\''StateMet/'\''HeightDiagn/g' \
+                -e 's/StateMet.template/HeightDiagn.template/g' \
+                -e 's/StateMet.frequency:         00000100 000000/HeightDiagn.frequency:         00000000 010000/g' \
+                -e 's/StateMet.duration:          00000100 000000/HeightDiagn.duration:          00000001 000000/g' \
+                -e 's/StateMet.mode:              '\''time-averaged/HeightDiagn.mode:              '\''instantaneous/g' \
+                -e 's/StateMet.fields:             '\''Met_AD      /HeightDiagn.fields:            '\''Met_BXHEIGHT/g' \
+                -e 's/Met_AIRDEN/Met_PHIS  /g' HISTORY.rc
+            sed -i '256,331d' HISTORY.rc # !!! CHECK THESE LINE NUMBERS
+        fi
     # For all other runs, just disable Restarts
     else
         if "$HourlyCH4"; then
