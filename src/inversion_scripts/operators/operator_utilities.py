@@ -278,6 +278,45 @@ def get_gridcell_list(lons, lats):
     gridcells = np.array(gridcells).reshape(len(lons), len(lats))
     return gridcells
 
+def get_3dgrid_list(lons, lats, levs):
+    """
+    Create a 3d array of dictionaries, with each dictionary representing a GC gridcell.
+    Dictionaries also initialize the fields necessary to store for observational data
+    (eg. methane, time, p_sat, etc.)
+
+    Arguments
+        lons     [float[]]      : list of gc longitudes for region of interest
+        lats     [float[]]      : list of gc latitudes for region of interest
+        levs     [float[]]      : list of gc levels for region of interest
+    Returns
+        gridcells [dict[][][]]  : 3D array of dicts representing a gridcell
+    """
+    # create array of dictionaries to represent gridcells
+    gridcells = []
+    for i in range(len(lons)):
+        for j in range(len(lats)):
+            for k in range(len(levs)):
+                gridcells.append(
+                    {
+                        "lat": lats[j],
+                        "lon": lons[i],
+                        "lev": levs[k],
+                        "iGC": i,
+                        "jGC": j,
+                        "kGC": k,
+                        "methane": [],
+                        "std_dev": [],
+                        "time": [],
+                        "lat_obs": [],
+                        "lon_obs": [],
+                        "observation_count": 0,
+                        "observation_weights": [],
+                    }
+                )
+    newshape = (len(lons), len(lats), len(levs))
+    gridcells = np.array(gridcells).reshape(newshape)
+    return gridcells
+
 
 def get_gc_lat_lon(gc_cache, start_date):
     """
@@ -303,9 +342,9 @@ def get_gc_lat_lon(gc_cache, start_date):
     gc_data.close()
     return gc_ll
 
-def get_gc_p(gc_cache, obs_time, obs_alt, gc_ij):
+def get_gc_lev(gc_cache, obs_time, obs_alt, gc_ij):
     """
-    get GEOS-Chem box center pressure for a given gridcell and altitude
+    get GEOS-Chem level for a given gridcell and altitude
 
     Arguments
         gc_cache    [str]   : path to gc data
@@ -314,31 +353,49 @@ def get_gc_p(gc_cache, obs_time, obs_alt, gc_ij):
         gc_ij       [list]  : GC indices of coordinates of observation
 
     Returns
-        output      [list]  : list of altitudes of GC box tops in gridcell
+        output      [float] : GC level index of observation
     """
-    gc_p = 0.0
-    p_s = 0.0
-    date = pd.to_datetime(obstime, unit='s')
+    gc_ilev = 0.0
+    date = pd.to_datetime(obs_time, unit='s')
     file_height = f"GEOSChem.HeightDiag.{date.strftime('%Y%m%d')}_0000z.nc4"
-    file_edge = f"GEOSChem.LevelEdgeDiags.{date.strftime('%Y%m%d')}_0000z.nc4"
-
-    filename = f"{gc_cache}/{file_edge}"
-    with xr.open_dataset(filename) as gc_edge:
-        p_s = gc_edge["Met_PEDGE"].values[date.hour, 1, gc_ij[0], gc_ij[1]] # hPa
 
     filename = f"{gc_cache}/{file_height}"
     with xr.open_dataset(filename) as gc_height:
         bxheight = gc_height["Met_BXHEIGHT"].values[date.hour, :, gc_ij[0], gc_ij[1]] # m
         phis = gc_height["Met_PHIS"].values[date.hour, gc_ij[0], gc_ij[1]] # m
-        hyam = gc_height["hyam"].values[:]
-        hybm = gc_height["hybm"].values[:]
         top_z = np.cumsum(bxheight) + phis # surface geopotential height + box tops height from surface
         bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude
         center_z = ((top_z - bottom_z ) / 2 ) + bottoms # box centers altitude
         gc_ilev = np.argmin(abs(center_z - obs_alt))  # vertical level index of observation
-        gc_p = ( hyam[gc_ilev] * p_s ) + hybm[gc_ilev] # grid box midpoint pressure at level of observation
+
+    return gc_ilev
+
+def get_gc_p(gc_cache, obs_time, obs_lev, gc_ij):
+    """
+    get GEOS-Chem box center pressure for a given gridcell and level
+
+    Arguments
+        gc_cache    [str]   : path to gc data
+        obs_time    [int]   : datetime of observation (unix epoch time)
+        obs_lev     [float] : GC level of observation
+        gc_ij       [list]  : GC indices of coordinates of observation
+
+    Returns
+        output      [float] : box center pressure at indicated gridcell and level
+    """
+    gc_p = 0.0
+    date = pd.to_datetime(obstime, unit='s')
+    file_edge = f"GEOSChem.LevelEdgeDiags.{date.strftime('%Y%m%d')}_0000z.nc4"
+
+    filename = f"{gc_cache}/{file_edge}"
+    with xr.open_dataset(filename) as gc_edge:
+        p_s = gc_edge["Met_PEDGE"].values[date.hour, 1, gc_ij[0], gc_ij[1]] # hPa
+        hyam = gc_edge["hyam"].values[:]
+        hybm = gc_edge["hybm"].values[:]
+        gc_p = ( hyam[gc_ilev] * p_s ) + hybm[gc_ilev] # grid box midpoint pressure at given level
 
     return gc_p
+
 
 def merge_pressure_grids(p_sat, p_gc):
     """
