@@ -310,7 +310,6 @@ def get_3dgrid_list(lons, lats, levs):
                         "lat_obs": [],
                         "lon_obs": [],
                         "observation_count": 0,
-                        "observation_weights": [],
                     }
                 )
     newshape = (len(lons), len(lats), len(levs))
@@ -357,7 +356,7 @@ def get_gc_lev(gc_cache, obs_time, obs_alt, gc_ij):
     """
     gc_ilev = 0.0
     date = pd.to_datetime(obs_time, unit='s')
-    file_height = f"GEOSChem.HeightDiag.{date.strftime('%Y%m%d')}_0000z.nc4"
+    file_height = f"GEOSChem.HeightDiagn.{date.strftime('%Y%m%d')}_0000z.nc4"
 
     filename = f"{gc_cache}/{file_height}"
     with xr.open_dataset(filename) as gc_height:
@@ -365,7 +364,7 @@ def get_gc_lev(gc_cache, obs_time, obs_alt, gc_ij):
         phis = gc_height["Met_PHIS"].values[date.hour, gc_ij[0], gc_ij[1]] # m
         top_z = np.cumsum(bxheight) + phis # surface geopotential height + box tops height from surface
         bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude
-        center_z = ((top_z - bottom_z ) / 2 ) + bottoms # box centers altitude
+        center_z = ((top_z - bottom_z ) / 2 ) + bottom_z # box centers altitude
         gc_ilev = np.argmin(abs(center_z - obs_alt))  # vertical level index of observation
 
     return gc_ilev

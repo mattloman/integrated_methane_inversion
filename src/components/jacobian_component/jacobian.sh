@@ -180,9 +180,10 @@ create_simulation_dir() {
                 -e 's/StateMet.frequency:         00000100 000000/HeightDiagn.frequency:         00000000 010000/g' \
                 -e 's/StateMet.duration:          00000100 000000/HeightDiagn.duration:          00000001 000000/g' \
                 -e 's/StateMet.mode:              '\''time-averaged/HeightDiagn.mode:              '\''instantaneous/g' \
-                -e 's/StateMet.fields:             '\''Met_AD      /HeightDiagn.fields:            '\''Met_BXHEIGHT/g' \
+                -e 's/StateMet.fields:            '\''Met_AD      /HeightDiagn.fields:            '\''Met_BXHEIGHT/g' \
                 -e 's/Met_AIRDEN/Met_PHIS  /g' HISTORY.rc
-            sed -i '256,331d' HISTORY.rc # !!! CHECK THESE LINE NUMBERS
+            sed -i '256,331d' HISTORY.rc
+            printf "Done writing changes to Jacobian base run HISTORY.rc\n"
         fi
     # For all other runs, just disable Restarts
     else
