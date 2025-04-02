@@ -12,13 +12,8 @@ from src.inversion_scripts.utils import (
 
 from src.inversion_scripts.operators.operator_utilities import (
     get_gc_lat_lon,
-    get_gc_p,
     get_gc_lev,
     read_all_geoschem,
-    merge_pressure_grids,
-    remap,
-    remap_sensitivities,
-    get_gridcell_list,
     get_3dgrid_list,
     nearest_loc,
 )
@@ -54,11 +49,13 @@ def apply_average_stationary_operator(
     Returns
         output         [dict]       : Dictionary with:
                                         - obs_GC : GEOS-Chem and observational methane data
-                                        - observed methane
-                                        - GEOS-Chem methane
-                                        - observation lat, lon
-                                        - observation lat index, lon index
-                                          If build_jacobian=True, also include:
+                                            - observed methane
+                                            - GEOS-Chem methane
+                                            - observation lat, lon
+                                            - observation count
+                                            - standard deviation of observed methane
+                                            - GEOS-Chem level of observation (calculated from altitude)
+                                        If build_jacobian=True, also include:
                                             - K      : Jacobian matrix
     """
     # Read observation data
@@ -123,9 +120,10 @@ def apply_average_stationary_operator(
         all_strdate, gc_cache, n_elements, config, build_jacobian
     )
 
-    # Initialize array with n_gridcells rows and 6 columns. Columns are
-    # observed CH4, GEOSChem CH4, longitude, latitude, GEOSChem level, observation counts
-    obs_GC = np.zeros([n_gridcells, 6], dtype=np.float32)
+    # Initialize array with n_gridcells rows and 7 columns. Columns are:
+    #   observed CH4, GEOSChem CH4, longitude, latitude, observation counts,
+    #   observation standard deviation, GEOSChem level
+    obs_GC = np.zeros([n_gridcells, 7], dtype=np.float32)
     obs_GC.fill(np.nan)
 
     # For each gridcell dict with TROPOMI obs:
@@ -249,13 +247,13 @@ def apply_average_stationary_operator(
             jacobian_K[i, :] = sensi_xch4
 
         # Save actual and virtual TROPOMI data
-        obs_GC[i, 0] = gridcell_dict[
-            "methane"
-        ]  # Actual TROPOMI methane column observation
-        obs_GC[i, 1] = virtual_tropomi  # Virtual TROPOMI methane column observation
-        obs_GC[i, 2] = gridcell_dict["lon_sat"]  # TROPOMI longitude
-        obs_GC[i, 3] = gridcell_dict["lat_sat"]  # TROPOMI latitude
+        obs_GC[i, 0] = gridcell_dict["methane"] # Actual methane observation
+        obs_GC[i, 1] = virtual_tropomi  # Virtual methane observation
+        obs_GC[i, 2] = gridcell_dict["lon_obs"] # observation longitude
+        obs_GC[i, 3] = gridcell_dict["lat_obs"] # observation latitude
         obs_GC[i, 4] = gridcell_dict["observation_count"]  # observation counts
+        obs_gc[i, 5] = gridcell_dict["std_dev"] # observation standard deviation
+        obs_gc[i, 6] = gridcell_dict["kGC"]     # GC level of observation
 
     # Output
     output = {}
@@ -279,7 +277,6 @@ def apply_stationary_operator(
     ylim,
     gc_cache,
     build_jacobian,
-    period_i,
     config,
 ):
     """
@@ -294,13 +291,13 @@ def apply_stationary_operator(
         ylim           [float]      : Latitude bounds for simulation domain
         gc_cache       [str]        : Path to GEOS-Chem output data
         build_jacobian [log]        : Are we trying to map GEOS-Chem sensitivities to observation space?
-        period_i       [int]        : kalman filter period
         config         [dict]       : dict of the config file
 
     Returns
         output         [dict]       : Dictionary with one or two fields:
                                                         - obs_GC : GEOS-Chem and observation methane data
                                                     - observed methane
+                                                    - observed methane standard deviation
                                                     - GEOS-Chem methane
                                                     - observation lat, lon
                                                     - observation lat index, lon index
@@ -487,15 +484,14 @@ def apply_stationary_operator(
         #obs_GC[k, 5] = jSat  # TROPOMI index of latitude
 
         # Save actual and virtual observation data
-        obs_GC[k, 0] = OBSPACK["methane"][
-            iObs, jObs
-        ]  # Actual methane observation
+        obs_GC[k, 0] = OBSPACK["methane"][iObs, jObs]   # Actual methane observation
         obs_GC[k, 1] = virtual_obs  # Virtual (GC) methane observation
         obs_GC[k, 2] = OBSPACK["longitude"][iObs, jObs] # observation longitude
         obs_GC[k, 3] = OBSPACK["latitude"][iObs, jObs]  # observation latitude
-        obs_GC[k, 4] = kGC  # observation GEOS-Chem level
-        obs_GC[k, 5] = iObs # empty index in OBSPACK
-        obs_GC[k, 6] = jObs # observation index in OBSPACK
+        obs_GC[k, 4] = iObs # empty index in OBSPACK
+        obs_GC[k, 5] = jObs # observation index in OBSPACK
+        obs_GC[k, 6] = OBSPACK["std_dev"][iObs, jObs]   # Standard deviation of observed methane
+        obs_GC[k, 7] = kGC  # observation GEOS-Chem level
 
         if build_jacobian:
             # Compute TROPOMI sensitivity as weighted mean by overlapping area
@@ -585,13 +581,15 @@ def average_obspack_observations(OBSPACK, gc_lat_lon_lev, obs_ind, time_threshol
         output         [dict[]]   : flat list of dictionaries the following fields:
                                     - lat                 : gridcell latitude
                                     - lon                 : gridcell longitude
+                                    - lev                 : gridcell level
                                     - iGC                 : longitude index value
                                     - jGC                 : latitude index value
+                                    - kGC                 : level index value
                                     - lat_obs             : averaged observation latitude
                                     - lon_obs             : averaged observation longitude
-                                    - time                : averaged time
                                     - methane             : averaged methane
                                     - std_dev             : standard deviation of averaged methane
+                                    - time                : averaged time
                                     - observation_count   : number of observations averaged in cell
 
     """

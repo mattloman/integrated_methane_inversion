@@ -90,7 +90,6 @@ def apply_operator(operator, params, config):
             params["ylim"],
             params["gc_cache"],
             params["build_jacobian"],
-            params["period_i"],
             config,
         ) 
     else:
