@@ -58,7 +58,7 @@ def read_geoschem(date, gc_cache, n_elements, config, build_jacobian=False):
     CH4 = gc_data["SpeciesConcVV_CH4"].values[0, :, :, :]
     CH4 = CH4 * 1e9  # Convert to ppb
     CH4 = np.einsum("lij->jil", CH4)
-    BXHEIGHT = gc_data[Met_BXHEIGHT].values[0, :, :, :]
+    BXHEIGHT = gc_data["Met_BXHEIGHT"].values[0, :, :, :]
     BXHEIGHT = np.einsum("lij->jil", BXHEIGHT)
     gc_data.close()
 

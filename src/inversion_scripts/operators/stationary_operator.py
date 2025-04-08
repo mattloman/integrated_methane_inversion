@@ -248,7 +248,7 @@ def apply_average_stationary_operator(
 
         # Save actual and virtual TROPOMI data
         obs_GC[i, 0] = gridcell_dict["methane"] # Actual methane observation
-        obs_GC[i, 1] = virtual_tropomi  # Virtual methane observation
+        obs_GC[i, 1] = virtual_obs              # Virtual methane observation
         obs_GC[i, 2] = gridcell_dict["lon_obs"] # observation longitude
         obs_GC[i, 3] = gridcell_dict["lat_obs"] # observation latitude
         obs_GC[i, 4] = gridcell_dict["observation_count"]  # observation counts
@@ -490,8 +490,9 @@ def apply_stationary_operator(
         obs_GC[k, 3] = OBSPACK["latitude"][iObs, jObs]  # observation latitude
         obs_GC[k, 4] = iObs # empty index in OBSPACK
         obs_GC[k, 5] = jObs # observation index in OBSPACK
-        obs_GC[k, 6] = OBSPACK["std_dev"][iObs, jObs]   # Standard deviation of observed methane
-        obs_GC[k, 7] = kGC  # observation GEOS-Chem level
+        obs_GC[k, 6] = OBSPACK["std_dev"][iObs, jObs] * 1e9   # Standard deviation of observed methane
+        obs_GC[k, 7] = OBSPACK["n"][iObs, jObs]         # number of measurements in observed methane value
+        obs_GC[k, 8] = kGC  # observation GEOS-Chem level
 
         if build_jacobian:
             # Compute TROPOMI sensitivity as weighted mean by overlapping area
@@ -540,17 +541,19 @@ def read_stationary(filename, gc_startdate, gc_enddate):
 
         # Extract data from netCDF file to our dictionary
         with xr.open_dataset(filename) as obs_data:
+            obs_data = obs_data.sel(time=slice(gc_startdate, gc_enddate))
+
             obs_time = obs_data["time"].values[:]
             # check for data in time range before reading in any other data
-            time_inrange = any(list(filter(lambda x: x >= gc_startdate and x <= gc_enddate, obs_time)))
-            if time_inrange: 
-                dat["time"] = obs_time
-                dat["methane"] = obs_data["value"].values[:]
-                dat["longitude"] = obs_data["longitude"].values[:]
-                dat["latitude"] = obs_data["latitude"].values[:]
-                dat["altitude"] = obs_data["altitude"].values[:]
-                dat["std_dev"] = obs_data["value_std_dev"].values[:]
-                dat["n"] = obs_data["nvalue"].values[:]
+            time_inrange = np.asarray((obs_time >= gc_startdate) & (obs_time <= gc_enddate)).nonzero()
+            if len(time_inrange[0]) > 0:
+                dat["time"] = obs_time.isel(time_inrange)
+                dat["methane"] = obs_data["value"].isel(time_inrange)
+                dat["longitude"] = obs_data["longitude"].isel(time_inrange)
+                dat["latitude"] = obs_data["latitude"].isel(time_inrange)
+                dat["altitude"] = obs_data["altitude"].isel(time_inrange)
+                dat["std_dev"] = obs_data["value_std_dev"].isel(time_inrange)
+                dat["n"] = obs_data["nvalue"].isel(time_inrange)
                 # Add an axis here to mimic the (scanline, groundpixel) format of operational TROPOMI data
                 # This is so the blended data will be compatible with the TROPOMI operators
                 for key in dat.keys():
@@ -645,11 +648,11 @@ def average_obspack_observations(OBSPACK, gc_lat_lon_lev, obs_ind, time_threshol
         gridcell_dict["methane"] = np.average(
             gridcell_dict["methane"],
         )
-        gridcell_dict["std_dev"] = np.sqrt(
+        gridcell_dict["std_dev"] = (np.sqrt(
             sum(
                 np.square(gridcell_dict["std_dev"])
             )
-        ) / len(gridcell_dict["std_dev"]) 
+        ) / len(gridcell_dict["std_dev"])) * 1e9 # get std dev of mean of means and convert to ppb 
         # take mean of epoch times and then convert gc filename time string
         time = pd.to_datetime(
             datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"])))

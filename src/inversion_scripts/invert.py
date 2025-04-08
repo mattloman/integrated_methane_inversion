@@ -21,6 +21,7 @@ def do_inversion(
     prior_err_bc=0.0,
     prior_err_oh=0.0,
     is_Regional=True,
+    StationaryObs,
 ):
     """
     After running jacobian.py, use this script to perform the inversion and save out results.
@@ -40,6 +41,7 @@ def do_inversion(
         prior_err_bc [float] : Prior error standard deviation (default 0.0)
         prior_err_oh [float] : Prior error standard deviation (default 0.0)
         is_Regional  [bool]  : Is this a regional simulation?
+        StationaryObs[bool]  : Does this simulation use stationary observations (only)?
 
     Returns
         xhat         [float] : Posterior scaling factors
@@ -138,25 +140,32 @@ def do_inversion(
         # TROPOMI and GEOS-Chem data within bounds
         obs_GC = obs_GC[ind, :]
 
-        # weight obs_err based on the observation count to prevent overfitting
-        # Note: weighting function defined by Zichong Chen for his
-        # middle east inversions. May need to be tuned based on region.
-        # From Chen et al. 2023:
-        # "Satellite quantification of methane emissions and oil/gas methane
-        # intensities from individual countries in the Middle East and North
-        # Africa: implications for climate action"
-        s_superO_1 = calculate_superobservation_error(obs_err, 1)
-        s_superO_p = np.array(
-            [
-                calculate_superobservation_error(obs_err, p) if p >= 1 else s_superO_1
-                for p in obs_GC[:, 4]
-            ]
-        )
-        # Define observational errors (diagonal entries of S_o matrix)
-        obs_error = np.power(obs_err, 2)
-        gP = s_superO_p**2 / s_superO_1**2
-        # scale error variance by gP
-        obs_error = gP * obs_error
+        if StationaryObs:
+            # uncertainty from different observations in each grid cell are
+            # combined in apply_averaging_stationary_operator, assuming
+            # zero error covariance between different measurements in each
+            # lat/lon/lev/timestep because they come from different instruments 
+            obs_error = obs_GC[:, 5]
+        else:
+            # weight obs_err based on the observation count to prevent overfitting
+            # Note: weighting function defined by Zichong Chen for his
+            # middle east inversions. May need to be tuned based on region.
+            # From Chen et al. 2023:
+            # "Satellite quantification of methane emissions and oil/gas methane
+            # intensities from individual countries in the Middle East and North
+            # Africa: implications for climate action"
+            s_superO_1 = calculate_superobservation_error(obs_err, 1)
+            s_superO_p = np.array(
+                [
+                    calculate_superobservation_error(obs_err, p) if p >= 1 else s_superO_1
+                    for p in obs_GC[:, 4]
+                ]
+            )
+            # Define observational errors (diagonal entries of S_o matrix)
+            obs_error = np.power(obs_err, 2)
+            gP = s_superO_p**2 / s_superO_1**2
+            # scale error variance by gP
+            obs_error = gP * obs_error
 
         # check to make sure obs_err isn't negative, set 1 as default value
         obs_error = [obs if obs > 0 else 1 for obs in obs_error]
