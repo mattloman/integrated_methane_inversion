@@ -81,7 +81,7 @@ def apply_operator(operator, params, config):
             config,
         )
     elif operator == "stationary":
-        return apply_average_stationary_operator(
+        return apply_stationary_operator(
             params["filename"],
             params["n_elements"],
             params["gc_startdate"],
@@ -154,14 +154,19 @@ if __name__ == "__main__":
     # Get observation data filenames for the desired date range
     allfiles = glob.glob(f"{obs_cache}/*.nc")
     obs_files = []
-    for index in range(len(allfiles)):
-        filename = allfiles[index]
-        shortname = re.split(r"\/", filename)[-1]
-        shortname = re.split(r"\.", shortname)[0]
-        strdate = re.split(r"\.|_+|T", shortname)[4]
-        strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
-        if (strdate >= gc_startdate) and (strdate <= gc_enddate):
-            sat_files.append(filename)
+    if StationaryObs:
+        # TO DO: create folder of symlinks to observation files that include
+        # start/end timestamps in the names
+        obs_files = allfiles
+    else: 
+        for index in range(len(allfiles)):
+            filename = allfiles[index]
+            shortname = re.split(r"\/", filename)[-1]
+            shortname = re.split(r"\.", shortname)[0]
+            strdate = re.split(r"\.|_+|T", shortname)[4]
+            strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
+            if (strdate >= gc_startdate) and (strdate <= gc_enddate):
+                obs_files.append(filename)
     obs_files.sort()
     print("Found", len(obs_files), "observation data files.")
 
@@ -208,7 +213,6 @@ if __name__ == "__main__":
                         "ylim": ylim,
                         "gc_cache": gc_cache,
                         "build_jacobian": False,
-                        "period_i": period_i,
                     },
                     config,
                 )
@@ -264,5 +268,5 @@ if __name__ == "__main__":
             save_obj(viz_output, f"{vizdir}/{date}_GCtoObs.pkl")
         return 0
 
-    results = Parallel(n_jobs=-1, verbose=10)(delayed(process)(filename) for filename in obs_files)
+    results = Parallel(n_jobs=1, verbose=10)(delayed(process)(filename) for filename in obs_files)
     print(f"Wrote files to {outputdir}")

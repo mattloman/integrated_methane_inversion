@@ -73,7 +73,7 @@ def apply_average_stationary_operator(
 
     # Number of observations
     n_obs = len(obs_ind[0])
-    print("Found", n_obs, " observations.")
+    print("Found", n_obs, "observations.")
 
     # get the lat/lons of gc gridcells
     gc_lat_lon_lev = get_gc_lat_lon(gc_cache, gc_startdate)
@@ -114,6 +114,8 @@ def apply_average_stationary_operator(
     # create list to store the dates/hour of each gridcell
     all_strdate = [gridcell["time"] for gridcell in obs_mapped_to_gc]
     all_strdate = list(set(all_strdate))
+
+    print(f"all_strdate: {all_strdate}\nall_strdate length: {len(all_strdate)}")
 
     # Read GEOS_Chem data for the dates of interest
     all_date_gc = read_all_geoschem(
@@ -365,8 +367,10 @@ def apply_stationary_operator(
        # dry_air_subcolumns = TROPOMI["dry_air_subcolumns"][iSat, jSat, :]  # mol m-2
        # apriori = TROPOMI["methane_profile_apriori"][iSat, jSat, :]  # mol m-2
        # avkern = TROPOMI["column_AK"][iSat, jSat, :]
-        time = pd.to_datetime(str(OBSPACK["time"][iObs, jObs]))
+        print(f"apply_stationary_operator")
+        time = pd.to_datetime(OBSPACK["time"][iObs, jObs])
         strdate = get_strdate(time, time_threshold)
+        print(f"    pd.to_datetime(OBSPACK['time']): {time}\n    strdate: {strdate}")
         GEOSCHEM = all_date_gc[strdate]
         dlon = np.median(np.diff(GEOSCHEM["lon"]))  # GEOS-Chem lon resolution
         dlat = np.median(np.diff(GEOSCHEM["lat"]))  # GEOS-Chem lon resolution
@@ -382,7 +386,7 @@ def apply_stationary_operator(
         # Find GEOS-Chem 3d coords closest to the observation coordinates
         iGC = nearest_loc(OBSPACK["longitude"][iObs, jObs, :], gc_lons, tolerance=max(dlon, 0.5))
         jGC = nearest_loc(OBSPACK["latitude"][iObs, jObs, :], gc_lats, tolerance=max(dlat, 0.5))
-        kGC = get_gc_lev(gc_cache, time.strftime("%s"), OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
+        kGC = get_gc_lev(gc_cache, time, OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
 
         # If the tolerance in nearest_loc() is not satisfied, skip the observation
         if np.isnan(iGC + jGC):
@@ -541,19 +545,17 @@ def read_stationary(filename, gc_startdate, gc_enddate):
 
         # Extract data from netCDF file to our dictionary
         with xr.open_dataset(filename) as obs_data:
-            obs_data = obs_data.sel(time=slice(gc_startdate, gc_enddate))
-
             obs_time = obs_data["time"].values[:]
             # check for data in time range before reading in any other data
             time_inrange = np.asarray((obs_time >= gc_startdate) & (obs_time <= gc_enddate)).nonzero()
             if len(time_inrange[0]) > 0:
-                dat["time"] = obs_time.isel(time_inrange)
-                dat["methane"] = obs_data["value"].isel(time_inrange)
-                dat["longitude"] = obs_data["longitude"].isel(time_inrange)
-                dat["latitude"] = obs_data["latitude"].isel(time_inrange)
-                dat["altitude"] = obs_data["altitude"].isel(time_inrange)
-                dat["std_dev"] = obs_data["value_std_dev"].isel(time_inrange)
-                dat["n"] = obs_data["nvalue"].isel(time_inrange)
+                dat["time"] = obs_data["time"].isel(obs=time_inrange[0]).astype("datetime64[ns]")
+                dat["methane"] = obs_data["value"].isel(obs=time_inrange[0])
+                dat["longitude"] = obs_data["longitude"].isel(obs=time_inrange[0])
+                dat["latitude"] = obs_data["latitude"].isel(obs=time_inrange[0])
+                dat["altitude"] = obs_data["altitude"].isel(obs=time_inrange[0])
+                dat["std_dev"] = obs_data["value_std_dev"].isel(obs=time_inrange[0])
+                dat["n"] = obs_data["nvalue"].isel(obs=time_inrange[0])
                 # Add an axis here to mimic the (scanline, groundpixel) format of operational TROPOMI data
                 # This is so the blended data will be compatible with the TROPOMI operators
                 for key in dat.keys():
@@ -616,15 +618,13 @@ def average_obspack_observations(OBSPACK, gc_lat_lon_lev, obs_ind, time_threshol
         if np.isnan(iGC + jGC):
             continue
 
-        # convert times to epoch time to make taking the mean easier
-        time_obs = int(pd.to_datetime(str(OBSPACK["time"][iObs, jObs])).strftime("%s"))
-        kGC = get_gc_lev(gc_cache, time_obs, OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
+        kGC = get_gc_lev(gc_cache, OBSPACK["time"][iObs, jObs], OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
 
         # Add obs info to gridcell_dicts
         gridcell_dict = gridcell_dicts[iGC][jGC][kGC]
         gridcell_dict["lat_obs"].append(OBSPACK["latitude"][iObs, jObs])
         gridcell_dict["lon_obs"].append(OBSPACK["longitude"][iObs, jObs])
-        gridcell_dict["time"].append(time_obs) 
+        gridcell_dict["time"].append(int(OBSPACK["time"][iObs, jObs])) # convert epoch time to integer for taking mean
         gridcell_dict["methane"].append(
             OBSPACK["methane"][iObs, jObs]
         )  # Actual methane observation
@@ -653,10 +653,13 @@ def average_obspack_observations(OBSPACK, gc_lat_lon_lev, obs_ind, time_threshol
                 np.square(gridcell_dict["std_dev"])
             )
         ) / len(gridcell_dict["std_dev"])) * 1e9 # get std dev of mean of means and convert to ppb 
-        # take mean of epoch times and then convert gc filename time string
+        # take mean of epoch times and then convert to gc filename time string
+        # divide by 1e9 cause datetime.fromtimestamp doesn't like the big number :(
         time = pd.to_datetime(
-            datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"])))
+            datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"]))*1e-9)
         )
+        #time = np.mean(gridcell_dict["time"])
+        #print(f"time vector: {gridcell_dict['time']}\naveraged datetime: {int(time)}")
         gridcell_dict["time"] = get_strdate(time, time_threshold)
         
     return gridcell_dicts

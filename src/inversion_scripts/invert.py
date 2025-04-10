@@ -144,7 +144,8 @@ def do_inversion(
             # uncertainty from different observations in each grid cell are
             # combined in apply_averaging_stationary_operator, assuming
             # zero error covariance between different measurements in each
-            # lat/lon/lev/timestep because they come from different instruments 
+            # lat/lon/lev/timestep because they come from different instruments.
+            # values are saved as ppbv
             obs_error = obs_GC[:, 5]
         else:
             # weight obs_err based on the observation count to prevent overfitting

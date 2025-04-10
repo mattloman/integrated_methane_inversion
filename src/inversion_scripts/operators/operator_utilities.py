@@ -355,13 +355,12 @@ def get_gc_lev(gc_cache, obs_time, obs_alt, gc_ij):
         output      [float] : GC level index of observation
     """
     gc_ilev = 0.0
-    date = pd.to_datetime(obs_time, unit='s')
-    file_height = f"GEOSChem.HeightDiagn.{date.strftime('%Y%m%d')}_0000z.nc4"
-
-    filename = f"{gc_cache}/{file_height}"
-    with xr.open_dataset(filename) as gc_height:
-        bxheight = gc_height["Met_BXHEIGHT"].values[date.hour, :, gc_ij[0], gc_ij[1]] # m
-        phis = gc_height["Met_PHIS"].values[date.hour, gc_ij[0], gc_ij[1]] # m
+    date = pd.to_datetime(obs_time, unit='s', utc=True)
+    file_species = f"GEOSChem.SpeciesConc.{date.strftime('%Y%m%d_%H')}00z.nc4"
+    filename = f"{gc_cache}/{file_species}"
+    with xr.open_dataset(filename) as gc_species:
+        bxheight = gc_species["Met_BXHEIGHT"].values[0, :, gc_ij[0], gc_ij[1]] # m
+        phis = gc_species["Met_PHIS"].values[0, gc_ij[0], gc_ij[1]] # m
         top_z = np.cumsum(bxheight) + phis # surface geopotential height + box tops height from surface
         bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude
         center_z = ((top_z - bottom_z ) / 2 ) + bottom_z # box centers altitude
@@ -384,7 +383,7 @@ def get_gc_p(gc_cache, obs_time, obs_lev, gc_ij):
     """
     gc_p = 0.0
     date = pd.to_datetime(obstime, unit='s')
-    file_edge = f"GEOSChem.LevelEdgeDiags.{date.strftime('%Y%m%d')}_0000z.nc4"
+    file_edge = f"GEOSChem.LevelEdgeDiags.{date.strftime('%Y%m%d_%H')}00z.nc4"
 
     filename = f"{gc_cache}/{file_edge}"
     with xr.open_dataset(filename) as gc_edge:
