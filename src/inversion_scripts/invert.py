@@ -197,7 +197,7 @@ def do_inversion(
             else:
                 K *= scaling_matrix
 
-        # Measurement-model mismatch: TROPOMI columns minus GEOS-Chem virtual TROPOMI columns
+        # Measurement-model mismatch: observed concentrations/columns minus GEOS-Chem concentrations/virtual columns
         # This is (y - F(xA)), i.e., (y - (K*xA + c)) or (y - K*xA) in shorthand
         delta_y = obs_GC[:, 0] - obs_GC[:, 1]  # [ppb]
 
