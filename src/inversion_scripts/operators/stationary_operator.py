@@ -115,8 +115,6 @@ def apply_average_stationary_operator(
     all_strdate = [gridcell["time"] for gridcell in obs_mapped_to_gc]
     all_strdate = list(set(all_strdate))
 
-    print(f"all_strdate: {all_strdate}\nall_strdate length: {len(all_strdate)}")
-
     # Read GEOS_Chem data for the dates of interest
     all_date_gc = read_all_geoschem(
         all_strdate, gc_cache, n_elements, config, build_jacobian
@@ -254,8 +252,8 @@ def apply_average_stationary_operator(
         obs_GC[i, 2] = gridcell_dict["lon_obs"] # observation longitude
         obs_GC[i, 3] = gridcell_dict["lat_obs"] # observation latitude
         obs_GC[i, 4] = gridcell_dict["observation_count"]  # observation counts
-        obs_gc[i, 5] = gridcell_dict["std_dev"] # observation standard deviation
-        obs_gc[i, 6] = gridcell_dict["kGC"]     # GC level of observation
+        obs_GC[i, 5] = gridcell_dict["std_dev"] # observation standard deviation
+        obs_GC[i, 6] = gridcell_dict["kGC"]     # GC level of observation
 
     # Output
     output = {}
@@ -353,8 +351,9 @@ def apply_stationary_operator(
         all_strdate, gc_cache, n_elements, config, build_jacobian
     )
 
-    # Initialize array with n_obs rows and 6 columns. Columns are TROPOMI CH4, GEOSChem CH4, longitude, latitude, II, JJ
-    obs_GC = np.zeros([n_obs, 6], dtype=np.float32)
+    # Initialize array with n_obs rows and 9 columns
+    # Columns are observed CH4, GEOSChem CH4, longitude, latitude, II, JJ, obs std. dev, obs n, and GEOSChem level
+    obs_GC = np.zeros([n_obs, 9], dtype=np.float32)
     obs_GC.fill(np.nan)
 
     # For each observation:
@@ -384,8 +383,8 @@ def apply_stationary_operator(
         virtual_sensitivity = 0  # virtual sensitivity
 
         # Find GEOS-Chem 3d coords closest to the observation coordinates
-        iGC = nearest_loc(OBSPACK["longitude"][iObs, jObs, :], gc_lons, tolerance=max(dlon, 0.5))
-        jGC = nearest_loc(OBSPACK["latitude"][iObs, jObs, :], gc_lats, tolerance=max(dlat, 0.5))
+        iGC = nearest_loc(OBSPACK["longitude"][iObs, jObs], GEOSCHEM["lon"], tolerance=max(dlon, 0.5))
+        jGC = nearest_loc(OBSPACK["latitude"][iObs, jObs], GEOSCHEM["lat"], tolerance=max(dlat, 0.5))
         kGC = get_gc_lev(gc_cache, time, OBSPACK["altitude"][iObs, jObs], [iGC, jGC])
 
         # If the tolerance in nearest_loc() is not satisfied, skip the observation
@@ -656,10 +655,9 @@ def average_obspack_observations(OBSPACK, gc_lat_lon_lev, obs_ind, time_threshol
         # take mean of epoch times and then convert to gc filename time string
         # divide by 1e9 cause datetime.fromtimestamp doesn't like the big number :(
         time = pd.to_datetime(
-            datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"]))*1e-9)
+            datetime.datetime.fromtimestamp(int(np.mean(gridcell_dict["time"]))*1e-9, datetime.timezone.utc)
         )
         #time = np.mean(gridcell_dict["time"])
-        #print(f"time vector: {gridcell_dict['time']}\naveraged datetime: {int(time)}")
         gridcell_dict["time"] = get_strdate(time, time_threshold)
         
     return gridcell_dicts
