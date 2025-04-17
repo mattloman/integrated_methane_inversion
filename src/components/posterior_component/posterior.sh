@@ -75,6 +75,12 @@ setup_posterior() {
             -e 's/Restart.duration:           '\''End'\''/Restart.duration:           00000001 000000/g' HISTORY.rc
     fi
 
+    if "$StationaryObs"; then
+        # add box height and geopotential height to SpeciesConc
+        sed -i -e "s|###'SpeciesConcMND_?ALL?|'Met_BXHEIGHT',\n                              'Met_PHIS|g" HISTORY.rc
+        #printf "Done writing changes to Jacobian base run HISTORY.rc\n"
+    fi
+
     ### Turn on observation operators if requested, for posterior run
     activate_observations
 
@@ -234,8 +240,14 @@ run_posterior() {
     # fill kf_period with dummy number here
     kf_period=1
 
+    if "$StationaryObs"; then
+        obsCache=$StationaryObsDir
+    else
+        obsCache=$tropomiCache
+    fi
+
     printf "\n=== Calling jacobian.py to sample posterior simulation (without jacobian sensitivity analysis) ===\n"
-    python ${InversionPath}/src/inversion_scripts/jacobian.py ${ConfigPath} $StartDate_i $EndDate_i $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI $UseWaterObs $isPost $kf_period $buildJacobian False
+    python ${InversionPath}/src/inversion_scripts/jacobian.py ${ConfigPath} $StartDate_i $EndDate_i $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $obsCache $StationaryObs $BlendedTROPOMI $UseWaterObs $isPost $kf_period $buildJacobian False
     wait
     printf "\n=== DONE sampling the posterior simulation ===\n\n"
     posterior_end=$(date +%s)

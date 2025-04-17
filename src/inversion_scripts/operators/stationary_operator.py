@@ -119,6 +119,8 @@ def apply_average_stationary_operator(
     all_date_gc = read_all_geoschem(
         all_strdate, gc_cache, n_elements, config, build_jacobian
     )
+    
+    print(f"apply_average_stationary_operator gc_cache: {gc_cache}")
 
     # Initialize array with n_gridcells rows and 7 columns. Columns are:
     #   observed CH4, GEOSChem CH4, longitude, latitude, observation counts,
@@ -240,13 +242,56 @@ def apply_average_stationary_operator(
             # calculate difference
             delta_xch4 = pert_jacobian_xch4 - base_xch4
 
+            print("\npert_jacobian_xch4\n",
+                "Min:",
+                pert_jacobian_xch4.min(),
+                "Mean:",
+                pert_jacobian_xch4.mean(),
+                "Max",
+                pert_jacobian_xch4.max(),
+            )
+
+            print("\nbase_xch4\n",
+                "Min:",
+                base_xch4.min(),
+                "Mean:",
+                base_xch4.mean(),
+                "Max",
+                base_xch4.max(),
+            )
+
+            print("\nperturbations\n",
+                "Min:",
+                perturbations.min(),
+                "Mean:",
+                perturbations.mean(),
+                "Max",
+                perturbations.max(),
+            )
+
             # calculate sensitivities
             sensi_xch4 = delta_xch4 / perturbations
+            
+            print("sensi_xch4\n",
+                "Min:",
+                sensi_xch4.min(),
+                "Mean:",
+                sensi_xch4.mean(),
+                "Max",
+                sensi_xch4.max(),
+            )
+            if any(np.isnan(sensi_xch4)):
+                indices = np.asarray(np.isnan(sensi_xch4)).nonzero()
+                nan_jac = pert_jacobian_xch4[np.asarray(np.isnan(sensi_xch4)).nonzero()]
+                nan_base = base_xch4[np.asarray(np.isnan(sensi_xch4)).nonzero()]
+                nan_pert = perturbations[np.asarray(np.isnan(sensi_xch4)).nonzero()]
+                print(f"NaNs found in sensi_xch4!\n    base_xch4 at NaN indices: {nan_base}\n    pert_jacobian_xch4 at NaN indices: {nan_jac}\n    perturbations at NaN indices: {nan_pert}\n\n")
+                print("ERROR: NaNs in sensi_xch4")
 
             # fill jacobian array
             jacobian_K[i, :] = sensi_xch4
 
-        # Save actual and virtual TROPOMI data
+        # Save actual and virtual observation data
         obs_GC[i, 0] = gridcell_dict["methane"] # Actual methane observation
         obs_GC[i, 1] = virtual_obs              # Virtual methane observation
         obs_GC[i, 2] = gridcell_dict["lon_obs"] # observation longitude
@@ -366,10 +411,8 @@ def apply_stationary_operator(
        # dry_air_subcolumns = TROPOMI["dry_air_subcolumns"][iSat, jSat, :]  # mol m-2
        # apriori = TROPOMI["methane_profile_apriori"][iSat, jSat, :]  # mol m-2
        # avkern = TROPOMI["column_AK"][iSat, jSat, :]
-        print(f"apply_stationary_operator")
         time = pd.to_datetime(OBSPACK["time"][iObs, jObs])
         strdate = get_strdate(time, time_threshold)
-        print(f"    pd.to_datetime(OBSPACK['time']): {time}\n    strdate: {strdate}")
         GEOSCHEM = all_date_gc[strdate]
         dlon = np.median(np.diff(GEOSCHEM["lon"]))  # GEOS-Chem lon resolution
         dlat = np.median(np.diff(GEOSCHEM["lat"]))  # GEOS-Chem lon resolution
@@ -494,8 +537,8 @@ def apply_stationary_operator(
         obs_GC[k, 4] = iObs # empty index in OBSPACK
         obs_GC[k, 5] = jObs # observation index in OBSPACK
         obs_GC[k, 6] = OBSPACK["std_dev"][iObs, jObs] * 1e9   # Standard deviation of observed methane
-        obs_GC[k, 7] = OBSPACK["n"][iObs, jObs]         # number of measurements in observed methane value
-        obs_GC[k, 8] = kGC  # observation GEOS-Chem level
+        obs_GC[k, 7] = kGC  # observation GEOS-Chem level
+        #obs_GC[k, 8] = OBSPACK["n"][iObs, jObs]         # number of measurements in observed methane value
 
         if build_jacobian:
             # Compute TROPOMI sensitivity as weighted mean by overlapping area
@@ -527,12 +570,12 @@ def read_stationary(filename, gc_startdate, gc_enddate):
         gc_enddate     [datetime64] : Last day of inversion period, for GEOS-Chem and TROPOMI
     Returns
         dat      [dict] : Dictionary of important variables from stationary data:
-                            - CH4 (mol/mol)
+                            - CH4 (ppb)
                             - Latitude
                             - Longitude
                             - Altitude (m)
                             - Time (s since Jan 1 1970)
-                            - CH4 measurement uncertainty (mol/mol)
+                            - CH4 measurement uncertainty (ppb)
     """
     assert (
         "ch4" in filename
@@ -549,12 +592,28 @@ def read_stationary(filename, gc_startdate, gc_enddate):
             time_inrange = np.asarray((obs_time >= gc_startdate) & (obs_time <= gc_enddate)).nonzero()
             if len(time_inrange[0]) > 0:
                 dat["time"] = obs_data["time"].isel(obs=time_inrange[0]).astype("datetime64[ns]")
-                dat["methane"] = obs_data["value"].isel(obs=time_inrange[0])
+                dat["methane"] = obs_data["value"].isel(obs=time_inrange[0]) * 1e9 # convert to ppb
                 dat["longitude"] = obs_data["longitude"].isel(obs=time_inrange[0])
                 dat["latitude"] = obs_data["latitude"].isel(obs=time_inrange[0])
                 dat["altitude"] = obs_data["altitude"].isel(obs=time_inrange[0])
-                dat["std_dev"] = obs_data["value_std_dev"].isel(obs=time_inrange[0])
-                dat["n"] = obs_data["nvalue"].isel(obs=time_inrange[0])
+
+                # If value_unc is available, use it. But most only have value_std_dev
+                if "value_unc" in obs_data.data_vars:
+                    dat["std_dev"] = obs_data["value_unc"].isel(obs=time_inrange[0])
+                elif "value_std_dev" in obs_data.data_vars:
+                    dat["std_dev"] = obs_data["value_std_dev"].isel(obs=time_inrange[0])
+                else:
+                    print(f"{filename} has no uncertainty or standard deviation available. Assuming 50% uncertainty.")
+                    dat["std_dev"] = 0.5 * obs_data["value"].isel(obs=time_inrange[0])
+
+                dat["std_dev"] = dat["std_dev"] * 1e9 # convert to ppb
+                # dat["n"] = obs_data["nvalue"].isel(obs=time_inrange[0])
+                
+                if any(np.isnan(dat["methane"])):
+                    print(f"NaNs found in {filename}")
+                if any(dat["methane"] < 0):
+                    print(f"Negative values found in {filename}")
+
                 # Add an axis here to mimic the (scanline, groundpixel) format of operational TROPOMI data
                 # This is so the blended data will be compatible with the TROPOMI operators
                 for key in dat.keys():

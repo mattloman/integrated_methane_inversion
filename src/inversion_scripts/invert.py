@@ -13,6 +13,7 @@ def do_inversion(
     lon_max,
     lat_min,
     lat_max,
+    StationaryObs,
     prior_err=0.5,
     obs_err=15,
     gamma=0.25,
@@ -21,7 +22,6 @@ def do_inversion(
     prior_err_bc=0.0,
     prior_err_oh=0.0,
     is_Regional=True,
-    StationaryObs,
 ):
     """
     After running jacobian.py, use this script to perform the inversion and save out results.
@@ -320,14 +320,15 @@ if __name__ == "__main__":
     lon_max = float(sys.argv[5])
     lat_min = float(sys.argv[6])
     lat_max = float(sys.argv[7])
-    prior_err = float(sys.argv[8])
-    obs_err = float(sys.argv[9])
-    gamma = float(sys.argv[10])
-    res = sys.argv[11]
-    jacobian_sf = sys.argv[12]
-    prior_err_BC = float(sys.argv[13])
-    prior_err_OH = float(sys.argv[14])
-    is_Regional = sys.argv[15].lower() == "true"
+    StationaryObs = sys.argv[8].lower() == "true"
+    prior_err = float(sys.argv[9])
+    obs_err = float(sys.argv[10])
+    gamma = float(sys.argv[11])
+    res = sys.argv[12]
+    jacobian_sf = sys.argv[13]
+    prior_err_BC = float(sys.argv[14])
+    prior_err_OH = float(sys.argv[15])
+    is_Regional = sys.argv[16].lower() == "true"
 
     # Reformat Jacobian scale factor input
     if jacobian_sf == "None":
@@ -341,6 +342,7 @@ if __name__ == "__main__":
         lon_max,
         lat_min,
         lat_max,
+        StationaryObs,
         prior_err,
         obs_err,
         gamma,
