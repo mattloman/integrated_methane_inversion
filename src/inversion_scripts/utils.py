@@ -352,6 +352,7 @@ def filter_stationary(stationary_data, xlim, ylim, startdate, enddate):
         & (stationary_data["latitude"] < ylim[1])
         & (stationary_data["time"] >= startdate)
         & (stationary_data["time"] <= enddate)
+        & (np.isfinite(stationary_data["methane"]))
     )
 
     return np.where(valid_idx)

@@ -609,10 +609,10 @@ def read_stationary(filename, gc_startdate, gc_enddate):
                 dat["std_dev"] = dat["std_dev"] * 1e9 # convert to ppb
                 # dat["n"] = obs_data["nvalue"].isel(obs=time_inrange[0])
                 
-                if any(np.isnan(dat["methane"])):
-                    print(f"NaNs found in {filename}")
-                if any(dat["methane"] < 0):
-                    print(f"Negative values found in {filename}")
+                # if any(np.isnan(dat["methane"])):
+                #     print(f"NaNs found in {filename}")
+                # if any(dat["methane"] < 0):
+                #     print(f"Negative values found in {filename}")
 
                 # Add an axis here to mimic the (scanline, groundpixel) format of operational TROPOMI data
                 # This is so the blended data will be compatible with the TROPOMI operators
