@@ -120,8 +120,6 @@ def apply_average_stationary_operator(
         all_strdate, gc_cache, n_elements, config, build_jacobian
     )
     
-    print(f"apply_average_stationary_operator gc_cache: {gc_cache}")
-
     # Initialize array with n_gridcells rows and 7 columns. Columns are:
     #   observed CH4, GEOSChem CH4, longitude, latitude, observation counts,
     #   observation standard deviation, GEOSChem level
@@ -155,26 +153,6 @@ def apply_average_stationary_operator(
                 xch4[v] = GEOSCHEM[v][
                     gridcell_dict["iGC"], gridcell_dict["jGC"], gridcell_dict["kGC"], :
                 ]
-                # Map the sensitivities to TROPOMI pressure levels
-                #sat_deltaCH4 = remap_sensitivities(
-                #    jacobian_lonlat,
-                #    merged["data_type"],
-                #    merged["p_merge"],
-                #    merged["edge_index"],
-                #    merged["first_gc_edge"],
-                #)  # mixing ratio, unitless
-                # Tile the TROPOMI averaging kernel
-                #avkern_tiled = np.transpose(np.tile(avkern, (n_elements, 1)))
-                # Tile the TROPOMI dry air subcolumns
-                #dry_air_subcolumns_tiled = np.transpose(
-                #    np.tile(dry_air_subcolumns, (n_elements, 1))
-                #)  # mol m-2
-                # Derive the change in column-averaged XCH4 that TROPOMI would see over this ground cell
-                #xch4[v] = np.sum(
-                #    avkern_tiled * sat_deltaCH4 * dry_air_subcolumns_tiled, 0
-                #) / sum(
-                #    dry_air_subcolumns
-                #)  # mixing ratio, unitless
 
             # separate variables for convenience later
             pert_jacobian_xch4 = xch4["jacobian_ch4"]
@@ -242,52 +220,9 @@ def apply_average_stationary_operator(
             # calculate difference
             delta_xch4 = pert_jacobian_xch4 - base_xch4
 
-            print("\npert_jacobian_xch4\n",
-                "Min:",
-                pert_jacobian_xch4.min(),
-                "Mean:",
-                pert_jacobian_xch4.mean(),
-                "Max",
-                pert_jacobian_xch4.max(),
-            )
-
-            print("\nbase_xch4\n",
-                "Min:",
-                base_xch4.min(),
-                "Mean:",
-                base_xch4.mean(),
-                "Max",
-                base_xch4.max(),
-            )
-
-            print("\nperturbations\n",
-                "Min:",
-                perturbations.min(),
-                "Mean:",
-                perturbations.mean(),
-                "Max",
-                perturbations.max(),
-            )
-
             # calculate sensitivities
             sensi_xch4 = delta_xch4 / perturbations
             
-            print("sensi_xch4\n",
-                "Min:",
-                sensi_xch4.min(),
-                "Mean:",
-                sensi_xch4.mean(),
-                "Max",
-                sensi_xch4.max(),
-            )
-            if any(np.isnan(sensi_xch4)):
-                indices = np.asarray(np.isnan(sensi_xch4)).nonzero()
-                nan_jac = pert_jacobian_xch4[np.asarray(np.isnan(sensi_xch4)).nonzero()]
-                nan_base = base_xch4[np.asarray(np.isnan(sensi_xch4)).nonzero()]
-                nan_pert = perturbations[np.asarray(np.isnan(sensi_xch4)).nonzero()]
-                print(f"NaNs found in sensi_xch4!\n    base_xch4 at NaN indices: {nan_base}\n    pert_jacobian_xch4 at NaN indices: {nan_jac}\n    perturbations at NaN indices: {nan_pert}\n\n")
-                print("ERROR: NaNs in sensi_xch4")
-
             # fill jacobian array
             jacobian_K[i, :] = sensi_xch4
 
@@ -407,10 +342,6 @@ def apply_stationary_operator(
         # Get GEOS-Chem data for the date of the observation:
         iObs = obs_ind[0][k]
         jObs = obs_ind[1][k]
-       # p_sat = TROPOMI["pressures"][iSat, jSat, :]
-       # dry_air_subcolumns = TROPOMI["dry_air_subcolumns"][iSat, jSat, :]  # mol m-2
-       # apriori = TROPOMI["methane_profile_apriori"][iSat, jSat, :]  # mol m-2
-       # avkern = TROPOMI["column_AK"][iSat, jSat, :]
         time = pd.to_datetime(OBSPACK["time"][iObs, jObs])
         strdate = get_strdate(time, time_threshold)
         GEOSCHEM = all_date_gc[strdate]
@@ -418,7 +349,7 @@ def apply_stationary_operator(
         dlat = np.median(np.diff(GEOSCHEM["lat"]))  # GEOS-Chem lon resolution
 
         # =======================================================
-        #       Map GEOS-Chem to TROPOMI observation space
+        #       Map GEOS-Chem to observation space
         # =======================================================
 
         # Initialize tropomi virtual xch4 and virtual sensitivity as zero
@@ -434,100 +365,14 @@ def apply_stationary_operator(
         if np.isnan(iGC + jGC):
             continue
 
-        # Get GEOS-Chem pressure edges for the cell
-        #p_gc = GEOSCHEM["PEDGE"][iGC, jGC, :]
-
         # Get GEOS-Chem methane for the cell
         #gc_CH4 = GEOSCHEM["CH4"][iGC, jGC, :]
         virtual_obs = GEOSCHEM["CH4"][iGC, jGC, kGC]
 
-        # Get merged GEOS-Chem/TROPOMI pressure grid for the cell
-        #merged = merge_pressure_grids(p_sat, p_gc)
-
-        # Remap GEOS-Chem methane to TROPOMI pressure levels
-        #sat_CH4 = remap(
-        #    gc_CH4,
-        #    merged["data_type"],
-        #    merged["p_merge"],
-        #    merged["edge_index"],
-        #    merged["first_gc_edge"],
-        #)  # ppb
-
-        # Convert ppb to mol m-2
-        #sat_CH4_molm2 = sat_CH4 * 1e-9 * dry_air_subcolumns  # mol m-2
-
-        # Derive the column-averaged XCH4 that TROPOMI would see over this ground cell
-        # using eq. 46 from TROPOMI Methane ATBD, Hasekamp et al. 2019
-        #virtual_tropomi_gridcellIndex = (
-        #    sum(apriori + avkern * (sat_CH4_molm2 - apriori))
-        #    / sum(dry_air_subcolumns)
-        #    * 1e9
-        #)  # ppb
-
-        # Weight by overlapping area (to be divided out later) and add to sum
-        #area_weighted_virtual_tropomi += (
-        #    overlap_area[gridcellIndex] * virtual_tropomi_gridcellIndex
-        #)  # ppb m2
-
         # If building Jacobian matrix from GEOS-Chem perturbation simulation sensitivity data:
         if build_jacobian:
-
-            # Get GEOS-Chem perturbation sensitivities at this lat/lon, for all levels and all state vector elements
-            #sensi_lonlat = GEOSCHEM["jacobian_ch4"][iGC, jGC, :, :]
-
             # Get GEOS-Chem perturbation sensitivities at this lat/lon/lev, for all state vector elements
             virtual_sensitivity = GEOSCHEM["jacobian_ch4"][iGC, jGC, kGC, :]
-
-            # Map the sensitivities to TROPOMI pressure levels
-            #sat_deltaCH4 = remap_sensitivities(
-            #    sensi_lonlat,
-            #    merged["data_type"],
-            #    merged["p_merge"],
-            #    merged["edge_index"],
-            #    merged["first_gc_edge"],
-            #)  # mixing ratio, unitless
-
-            # Tile the TROPOMI averaging kernel
-            #avkern_tiled = np.transpose(np.tile(avkern, (n_elements, 1)))
-
-            # Tile the TROPOMI dry air subcolumns
-            #dry_air_subcolumns_tiled = np.transpose(
-            #    np.tile(dry_air_subcolumns, (n_elements, 1))
-            #)  # mol m-2
-
-            # Derive the change in column-averaged XCH4 that TROPOMI would see over this ground cell
-            #tropomi_sensitivity_gridcellIndex = np.sum(
-            #    avkern_tiled * sat_deltaCH4 * dry_air_subcolumns_tiled, 0
-            #) / sum(
-            #    dry_air_subcolumns
-            #)  # mixing ratio, unitless
-
-            # Weight by overlapping area (to be divided out later) and add to sum
-            #area_weighted_virtual_tropomi_sensitivity += (
-            #    overlap_area[gridcellIndex] * tropomi_sensitivity_gridcellIndex
-            #)  # m2
-
-        # Compute virtual TROPOMI observation as weighted mean by overlapping area
-        # i.e., need to divide out area [m2] from the previous step
-        #virtual_tropomi = area_weighted_virtual_tropomi / sum(overlap_area)
-
-        # For global inversions, area of overlap should equal area of TROPOMI pixel
-        # This is because the GEOS-Chem grid is continuous
-        #if dlon > 2.0:
-        #    assert (
-        #        abs(sum(overlap_area) - polygon_tropomi.area) / polygon_tropomi.area
-        #        < 0.01
-        #    ), f"ERROR: overlap area ({sum(overlap_area)}) /= satellite pixel area ({polygon_tropomi.area})"
-
-        # Save actual and virtual TROPOMI data
-        #obs_GC[k, 0] = TROPOMI["methane"][
-        #    iSat, jSat
-        #]  # Actual TROPOMI methane column observation
-        #obs_GC[k, 1] = virtual_tropomi  # Virtual TROPOMI methane column observation
-        #obs_GC[k, 2] = TROPOMI["longitude"][iSat, jSat]  # TROPOMI longitude
-        #obs_GC[k, 3] = TROPOMI["latitude"][iSat, jSat]  # TROPOMI latitude
-        #obs_GC[k, 4] = iSat  # TROPOMI index of longitude
-        #obs_GC[k, 5] = jSat  # TROPOMI index of latitude
 
         # Save actual and virtual observation data
         obs_GC[k, 0] = OBSPACK["methane"][iObs, jObs]   # Actual methane observation
@@ -538,14 +383,8 @@ def apply_stationary_operator(
         obs_GC[k, 5] = jObs # observation index in OBSPACK
         obs_GC[k, 6] = OBSPACK["std_dev"][iObs, jObs] * 1e9   # Standard deviation of observed methane
         obs_GC[k, 7] = kGC  # observation GEOS-Chem level
-        #obs_GC[k, 8] = OBSPACK["n"][iObs, jObs]         # number of measurements in observed methane value
 
         if build_jacobian:
-            # Compute TROPOMI sensitivity as weighted mean by overlapping area
-            # i.e., need to divide out area [m2] from the previous step
-            #jacobian_K[k, :] = area_weighted_virtual_tropomi_sensitivity / sum(
-            #    overlap_area
-            #)
             jacobian_K[k, :] = virtual_sensitivity
 
     # Output

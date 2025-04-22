@@ -362,7 +362,7 @@ def get_gc_lev(gc_cache, obs_time, obs_alt, gc_ij):
         bxheight = gc_species["Met_BXHEIGHT"].values[0, :, gc_ij[0], gc_ij[1]] # m
         phis = gc_species["Met_PHIS"].values[0, gc_ij[0], gc_ij[1]] # m
         top_z = np.cumsum(bxheight) + phis # surface geopotential height + box tops height from surface
-        bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude
+        bottom_z = np.insert(top_z[:-1], 0, 0)  # box bottoms altitude. Anything below phis considered to be in surface box
         center_z = ((top_z - bottom_z ) / 2 ) + bottom_z # box centers altitude
         gc_ilev = np.argmin(abs(center_z - obs_alt))  # vertical level index of observation
 
