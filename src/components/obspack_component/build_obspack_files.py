@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     # For testing
     # obspack_config = {
-    #     "data_path": "/scratch/mloman/data/obspack_all",
+    #     "data_path": "/scratch/ltmurray_lab/data/input/gc/ObsPack/NYS",
     #     "lat_min": 32.5,
     #     "lat_max": 52.75,
     #     "lon_min": -87.8125,
@@ -65,12 +65,20 @@ if __name__ == "__main__":
         with xr.open_dataset(path) as obs_data:
 
             # Obspack_id isn't acutally used for anything in GC just has to exist, subsittude with file name.
+            df = obs_data[["time", "obs", "latitude", "longitude", "altitude"]].to_pandas()
+
             if "obspack_id" in obs_data.variables:
-                df = obs_data[["time", "obs", "latitude", "longitude", "altitude", "obspack_id"]].to_pandas()
+                df["obspack_id"] = obs_data[["obspack_id"]].to_pandas()
             else:
-                df = obs_data[["time", "obs", "latitude", "longitude", "altitude"]].to_pandas()
                 df["obspack_id"] = path.replace(obspack_config["data_path"], "")
-                df["obspack_id"] = df["obspack_id"].astype("S200")
+            df["obspack_id"] = df["obspack_id"].astype("S200")
+
+
+            if "CT_sampling_strategy" in obs_data.variables:
+                df["CT_sampling_strategy"] = obs_data[["CT_sampling_strategy"]].to_pandas()
+            else:
+                # Currently we just treat every sample as hourly averaged.
+                df["CT_sampling_strategy"] = 2
 
             df = df[df["time"].between(obspack_config["start_date"], obspack_config["end_date"])]
             df = df[df["latitude"].between(obspack_config["lat_min"], obspack_config["lat_max"])]
@@ -80,11 +88,11 @@ if __name__ == "__main__":
                 #print(f"{path} dropped as outside of time or grid range.")
                 continue
 
-            # Currently we just treat every sample as hourly averaged.
-            df["CT_sampling_strategy"] = 2
-
             for day in day_dict.keys():
                 df_day = df[df["time"].dt.floor("d") == day]
+
+                if df_day.size == 0:
+                    continue
 
                 day_dict[day].append(df_day)
 

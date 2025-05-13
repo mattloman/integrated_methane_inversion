@@ -137,6 +137,11 @@ setup_template() {
             -e 's/SpeciesConc.mode:           '\''time-averaged/SpeciesConc.mode:           '\''instantaneous/g' HISTORY.rc
     fi
 
+    # Disable history output if using ObsPack.
+    if [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/'\''SpeciesConc/#'\''SpeciesConc/g' HISTORY.rc
+    fi
+
     # Remove sample restart file
     rm -f Restarts/GEOSChem.Restart.20190101_0000z.nc4
 
