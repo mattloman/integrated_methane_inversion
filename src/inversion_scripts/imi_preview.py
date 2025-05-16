@@ -208,20 +208,51 @@ def imi_preview(
     # Prepare plot data for prior
     prior_kgkm2h = prior * (1000**2) * 60 * 60  # Units kg/km2/h
 
-    # Prepare plot data for observations
-    df_means = df.copy(deep=True)
-    df_means["lat"] = np.round(df_means["lat"], 1)  # Bin to 0.1x0.1 degrees
-    df_means["lon"] = np.round(df_means["lon"], 1)
-    df_means = df_means.groupby(["lat", "lon"]).mean()
-    ds = df_means.to_xarray()
+    if config["UseObsPack"]:
+        sv_lats = state_vector_labels.lat.values
+        sv_lats_mids = (sv_lats + (sv_lats[1] - sv_lats[0])/2)[:-1]
 
-    # Prepare plot data for observation counts
-    df_counts = df.copy(deep=True).drop(["xch4", "swir_albedo"], axis=1)
-    df_counts["counts"] = 1
-    df_counts["lat"] = np.round(df_counts["lat"], 1)  # Bin to 0.1x0.1 degrees
-    df_counts["lon"] = np.round(df_counts["lon"], 1)
-    df_counts = df_counts.groupby(["lat", "lon"]).sum()
-    ds_counts = df_counts.to_xarray()
+        sv_lons = state_vector_labels.lon.values
+        sv_lons_mids = (sv_lons + (sv_lons[1] - sv_lons[0])/2)[:-1]
+
+        df_regridded = df.copy(True)
+        df_regridded["lat"] = df_regridded["lat"].map(lambda x: sv_lats_mids[np.argmin(abs(sv_lats_mids - x))])
+        df_regridded["lon"] = df_regridded["lon"].map(lambda x: sv_lons_mids[np.argmin(abs(sv_lons_mids - x))])
+
+        # Create empty rows for combinations with no observations
+        new_rows = []
+        for LAT in sv_lats_mids:
+            for LON in sv_lons_mids:
+                if not ((df_regridded["lat"] == LAT) & (df_regridded["lon"] == LON)).any():
+                    new_rows.append(pd.DataFrame({"lat" : LAT, "lon" : LON}, index=[0]))
+
+        df_regridded = pd.concat([df_regridded, *new_rows])
+
+        df_means = df_regridded.copy(deep=True)
+        df_means = df_means.groupby(["lat", "lon"]).mean()
+        ds = df_means.to_xarray()
+
+        # Prepare plot data for observation counts
+        df_counts = df_regridded.copy(deep=True).drop(["xch4", "swir_albedo"], axis=1)
+        df_counts["counts"] = 1
+        df_counts = df_counts.groupby(["lat", "lon"]).sum()
+        ds_counts = df_counts.to_xarray()
+
+    else:
+        # Prepare plot data for observations
+        df_means = df.copy(deep=True)
+        df_means["lat"] = np.round(df_means["lat"], 1)  # Bin to 0.1x0.1 degrees
+        df_means["lon"] = np.round(df_means["lon"], 1)
+        df_means = df_means.groupby(["lat", "lon"]).mean()
+        ds = df_means.to_xarray()
+
+        # Prepare plot data for observation counts
+        df_counts = df.copy(deep=True).drop(["xch4", "swir_albedo"], axis=1)
+        df_counts["counts"] = 1
+        df_counts["lat"] = np.round(df_counts["lat"], 1)  # Bin to 0.1x0.1 degrees
+        df_counts["lon"] = np.round(df_counts["lon"], 1)
+        df_counts = df_counts.groupby(["lat", "lon"]).sum()
+        ds_counts = df_counts.to_xarray()
 
     plt.rcParams.update({"font.size": 18})
 
@@ -255,51 +286,78 @@ def imi_preview(
         np.round(np.nanmedian(vals) / 25.0) * 25 - 25,
         np.round(np.nanmedian(vals) / 25.0) * 25 + 25,
     )
-    # Plot observations
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
-    xch4_min, xch4_max = dynamic_range(ds["xch4"].values)
-    plot_field(
-        ax,
-        ds["xch4"],
-        cmap="Spectral_r",
-        plot_type="pcolormesh",
-        vmin=xch4_min,
-        vmax=xch4_max,
-        lon_bounds=None,
-        lat_bounds=None,
-        title="TROPOMI $X_{CH4}$",
-        cbar_label="Column mixing ratio (ppb)",
-        mask=mask if config["isRegional"] else None,
-        only_ROI=False,
-    )
+    if config["UseObsPack"]:
+        # Plot observations
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
+        xch4_min, xch4_max = dynamic_range(ds["xch4"].values)
 
-    plt.savefig(
-        os.path.join(preview_dir, "preview_observations.png"),
-        bbox_inches="tight",
-        dpi=150,
-    )
+        plot_field(
+            ax,
+            ds["xch4"],
+            cmap="Spectral_r",
+            plot_type="pcolormesh",
+            vmin=xch4_min,
+            vmax=xch4_max,
+            lon_bounds=None,
+            lat_bounds=None,
+            title="Obspack $X_{CH4}$",
+            cbar_label="Column mixing ratio (ppb)",
+            mask=mask if config["isRegional"] else None,
+            only_ROI=False,
+        )
 
+        plt.savefig(
+            os.path.join(preview_dir, "preview_observations.png"),
+            bbox_inches="tight",
+            dpi=150,
+        )
+    else:
+        # Plot observations
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
+        xch4_min, xch4_max = dynamic_range(ds["xch4"].values)
+        plot_field(
+            ax,
+            ds["xch4"],
+            cmap="Spectral_r",
+            plot_type="pcolormesh",
+            vmin=xch4_min,
+            vmax=xch4_max,
+            lon_bounds=None,
+            lat_bounds=None,
+            title="TROPOMI $X_{CH4}$",
+            cbar_label="Column mixing ratio (ppb)",
+            mask=mask if config["isRegional"] else None,
+            only_ROI=False,
+        )
+
+        plt.savefig(
+            os.path.join(preview_dir, "preview_observations.png"),
+            bbox_inches="tight",
+            dpi=150,
+        )
+    if not config["UseObsPack"]:
     # Plot albedo
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
-    plot_field(
-        ax,
-        ds["swir_albedo"],
-        cmap="magma",
-        plot_type="pcolormesh",
-        vmin=0,
-        vmax=0.4,
-        lon_bounds=None,
-        lat_bounds=None,
-        title="SWIR Albedo",
-        cbar_label="Albedo",
-        mask=mask if config["isRegional"] else None,
-        only_ROI=False,
-    )
-    plt.savefig(
-        os.path.join(preview_dir, "preview_albedo.png"), bbox_inches="tight", dpi=150
-    )
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.subplots(1, 1, subplot_kw={"projection": ccrs.PlateCarree()})
+        plot_field(
+            ax,
+            ds["swir_albedo"],
+            cmap="magma",
+            plot_type="pcolormesh",
+            vmin=0,
+            vmax=0.4,
+            lon_bounds=None,
+            lat_bounds=None,
+            title="SWIR Albedo",
+            cbar_label="Albedo",
+            mask=mask if config["isRegional"] else None,
+            only_ROI=False,
+        )
+        plt.savefig(
+            os.path.join(preview_dir, "preview_albedo.png"), bbox_inches="tight", dpi=150
+        )
 
     # Plot observation density
     fig = plt.figure(figsize=(10, 8))
@@ -468,10 +526,6 @@ def estimate_averaging_kernel(
     # Observations in region of interest
     # ----------------------------------
 
-    # Paths to tropomi data files
-    tropomi_files = [f for f in os.listdir(tropomi_cache) if ".nc" in f]
-    tropomi_paths = [os.path.join(tropomi_cache, f) for f in tropomi_files]
-
     # Latitude/longitude bounds of the inversion domain
     xlim = [float(state_vector.lon.min()), float(state_vector.lon.max())]
     ylim = [float(state_vector.lat.min()), float(state_vector.lat.max())]
@@ -486,56 +540,92 @@ def estimate_averaging_kernel(
         - datetime.timedelta(days=1)
     )
 
-    # Only consider tropomi files within date range (in case more are present)
-    tropomi_paths = [
-        p
-        for p in tropomi_paths
-        if int(p.split("____")[1][0:8]) >= int(startday)
-        and int(p.split("____")[1][0:8]) < int(endday)
-    ]
-    tropomi_paths.sort()
 
-    # Use blended TROPOMI+GOSAT data or operational TROPOMI data?
-    BlendedTROPOMI = config["BlendedTROPOMI"]
+    if config["UseObsPack"]:
+            obspack_data_path = os.path.join(config["OutputPath"], config["RunName"], "obspack_data")
+            obs_files = [os.path.join(obspack_data_path, x) for x in os.listdir(obspack_data_path)]
+            obs_files.sort()
 
-    # Open tropomi files and filter data
-    lat = []
-    lon = []
-    xch4 = []
-    albedo = []
-    trtime = []
+            obs_files = [
+                p
+                for p in obs_files
+                if int(p[-18:-10]) >= int(startday)
+                and int(p[-18:-10]) < int(endday)
+            ]
 
-    # Read in and filter tropomi observations (uses parallel processing)
-    observation_dicts = Parallel(n_jobs=-1)(
-        delayed(get_TROPOMI_data)(
-            file_path,
-            BlendedTROPOMI,
-            xlim,
-            ylim,
-            startdate_np64,
-            enddate_np64,
-            use_water_obs,
-        )
-        for file_path in tropomi_paths
+            data = xr.open_mfdataset(obs_files)
+            data = data[["latitude", "longitude", "value", "time"]]
+            data = data.rename({"latitude": "lat",
+                                "longitude": "lon",
+                                "value": "xch4",
+                               })
+
+
+            df = data.to_pandas()
+
+            df["obs_count"] = 1
+            df["swir_albedo"] = np.NAN
+
+            df = df.dropna(subset="xch4")
+
+            df["xch4"] = df["xch4"]  * 1E9
+
+    else:
+
+        # Paths to tropomi data files
+        tropomi_files = [f for f in os.listdir(tropomi_cache) if ".nc" in f]
+        tropomi_paths = [os.path.join(tropomi_cache, f) for f in tropomi_files]
+
+        # Only consider tropomi files within date range (in case more are present)
+        tropomi_paths = [
+            p
+            for p in tropomi_paths
+            if int(p.split("____")[1][0:8]) >= int(startday)
+            and int(p.split("____")[1][0:8]) < int(endday)
+        ]
+        tropomi_paths.sort()
+
+        # Use blended TROPOMI+GOSAT data or operational TROPOMI data?
+        BlendedTROPOMI = config["BlendedTROPOMI"]
+
+        # Open tropomi files and filter data
+        lat = []
+        lon = []
+        xch4 = []
+        albedo = []
+        trtime = []
+
+        # Read in and filter tropomi observations (uses parallel processing)
+        observation_dicts = Parallel(n_jobs=-1)(
+            delayed(get_TROPOMI_data)(
+                file_path,
+                BlendedTROPOMI,
+                xlim,
+                ylim,
+                startdate_np64,
+                enddate_np64,
+                use_water_obs,
+            )
+            for file_path in tropomi_paths
     )
-    # Remove any problematic observation dicts (eg. corrupted data file)
-    observation_dicts = list(filter(None, observation_dicts))
+        # Remove any problematic observation dicts (eg. corrupted data file)
+        observation_dicts = list(filter(None, observation_dicts))
 
-    for obs_dict in observation_dicts:
-        lat.extend(obs_dict["lat"])
-        lon.extend(obs_dict["lon"])
-        xch4.extend(obs_dict["xch4"])
-        albedo.extend(obs_dict["swir_albedo"])
-        trtime.extend(obs_dict["time"])
+        for obs_dict in observation_dicts:
+            lat.extend(obs_dict["lat"])
+            lon.extend(obs_dict["lon"])
+            xch4.extend(obs_dict["xch4"])
+            albedo.extend(obs_dict["swir_albedo"])
+            trtime.extend(obs_dict["time"])
 
-    # Assemble in dataframe
-    df = pd.DataFrame()
-    df["lat"] = lat
-    df["lon"] = lon
-    df["obs_count"] = np.ones(len(lat))
-    df["swir_albedo"] = albedo
-    df["xch4"] = xch4
-    df["time"] = trtime
+        # Assemble in dataframe
+        df = pd.DataFrame()
+        df["lat"] = lat
+        df["lon"] = lon
+        df["obs_count"] = np.ones(len(lat))
+        df["swir_albedo"] = albedo
+        df["xch4"] = xch4
+        df["time"] = trtime
 
     # Set resolution specific variables
     # L_native = Rough length scale of native state vector element [m]
