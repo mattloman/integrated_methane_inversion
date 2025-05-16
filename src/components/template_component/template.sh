@@ -156,7 +156,16 @@ setup_template() {
     cd build
     cmake ${InversionPath}/GCClassic >>build_geoschem.log 2>&1
     cmake . -DRUNDIR=.. >>build_geoschem.log 2>&1
-    make -j install >>build_geoschem.log 2>&1
+
+    # Submit job to job scheduler
+    sbatch --mem $GC_Memory \
+        -c $GC_CPUs \
+        -t $RequestedTime \
+        -p $SchedulerPartition \
+        -J BuildGC \
+        -W \
+        --wrap="make -j install" >>build_geoschem.log 2>&1
+
     cd ..
     if [[ -f gcclassic ]]; then
         rm -rf build

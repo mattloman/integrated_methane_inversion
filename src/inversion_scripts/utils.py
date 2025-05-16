@@ -219,7 +219,6 @@ def plot_field(
     if lon_bounds and lat_bounds:
         extent = [lon_bounds[0], lon_bounds[1], lat_bounds[0], lat_bounds[1]]
         ax.set_extent(extent, crs=ccrs.PlateCarree())
-
     # Show boundary of ROI?
     if mask is not None:
         mask.plot.contour(levels=1, colors="k", linewidths=4, ax=ax)

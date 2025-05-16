@@ -61,11 +61,15 @@ if __name__ == "__main__":
                                          obspack_config["end_date"],
                                          dtype='datetime64[D]')}
 
+
+    tunits = 'seconds since 1970-01-01 00:00:00 UTC'
+    encoding = {"time":{"units": tunits, 'calendar': 'proleptic_gregorian', 'dtype': np.int64}}
+
     for path in filepaths:
         with xr.open_dataset(path) as obs_data:
 
             # Obspack_id isn't acutally used for anything in GC just has to exist, subsittude with file name.
-            df = obs_data[["time", "obs", "latitude", "longitude", "altitude"]].to_pandas()
+            df = obs_data[["time", "obs", "latitude", "longitude", "altitude", "value"]].to_pandas()
 
             if "obspack_id" in obs_data.variables:
                 df["obspack_id"] = obs_data[["obspack_id"]].to_pandas()
@@ -104,4 +108,4 @@ if __name__ == "__main__":
         day_str = day.astype("O").strftime("%Y%m%d")
         write_path = os.path.join(f"obspack_data/GEOSChem.ObsPack.{day_str}_0000z.nc4")
 
-        day_ds.to_netcdf(write_path)
+        day_ds.to_netcdf(write_path, encoding=encoding)

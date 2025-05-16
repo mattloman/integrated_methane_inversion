@@ -163,9 +163,16 @@ create_simulation_dir() {
         fi
     fi
 
+
+    # Enable history output for base run
+    if [[ $x -eq 0 ]] || [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
+    fi
+
+
     # Update settings in HISTORY.rc
     # Only save out hourly pressure fields to daily files for base run
-    if [[ $x -eq 0 ]] || [[ "$x" = "background" ]] || [[ "$UseObsPack" == false ]]; then
+    if [[ $x -eq 0 ]] || [[ "$x" = "background" ]]; then
         if "$HourlyCH4"; then
             sed -i -e 's/'\''Restart/#'\''Restart/g' \
                 -e 's/#'\''LevelEdgeDiags/'\''LevelEdgeDiags/g' \

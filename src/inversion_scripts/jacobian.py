@@ -13,6 +13,7 @@ from src.inversion_scripts.operators.TROPOMI_operator import (
     apply_average_tropomi_operator,
     apply_tropomi_operator,
 )
+from src.inversion_scripts.operators.ObsPack_operator import apply_obspack_operator
 from joblib import Parallel, delayed
 
 
@@ -67,6 +68,37 @@ def apply_operator(operator, params, config):
         raise ValueError("Error: invalid operator selected.")
 
 
+def get_tropomi(tropomi_cache, gc_startdate, gc_enddate):
+    # Get TROPOMI data filenames for the desired date range
+    allfiles = glob.glob(f"{tropomi_cache}/*.nc")
+    sat_files = []
+    for index in range(len(allfiles)):
+        filename = allfiles[index]
+        shortname = re.split(r"\/", filename)[-1]
+        shortname = re.split(r"\.", shortname)[0]
+        strdate = re.split(r"\.|_+|T", shortname)[4]
+        strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
+        if (strdate >= gc_startdate) and (strdate <= gc_enddate):
+            sat_files.append(filename)
+    sat_files.sort()
+    print("Found", len(sat_files), "TROPOMI data files.")
+
+    return sat_files
+
+def get_obspack(gc_startdate, gc_enddate):
+    allfiles = glob.glob(f"../obspack_data/GEOSChem.ObsPack*")
+    obs_files = []
+    for filename in allfiles:
+        strdate = filename[-18:-10]
+        strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
+        if (strdate >= gc_startdate) and (strdate <= gc_enddate):
+            obs_files.append(filename)
+    obs_files.sort()
+    print("Found", len(obs_files), "ObsPack files.")
+
+    return obs_files
+
+
 if __name__ == "__main__":
 
     config = yaml.load(open(sys.argv[1]), Loader=yaml.FullLoader)
@@ -84,6 +116,8 @@ if __name__ == "__main__":
     period_i = int(sys.argv[13])
     build_jacobian = sys.argv[14]
     viz_prior = sys.argv[15]
+    use_obspack = sys.argv[16]
+    obspack_cache = sys.argv[17]
 
     # Reformat start and end days for datetime in configuration
     start = f"{startday[0:4]}-{startday[4:6]}-{startday[6:8]} 00:00:00"
@@ -121,23 +155,14 @@ if __name__ == "__main__":
     print("Start:", start)
     print("End:", end)
 
-    # Get TROPOMI data filenames for the desired date range
-    allfiles = glob.glob(f"{tropomi_cache}/*.nc")
-    sat_files = []
-    for index in range(len(allfiles)):
-        filename = allfiles[index]
-        shortname = re.split(r"\/", filename)[-1]
-        shortname = re.split(r"\.", shortname)[0]
-        strdate = re.split(r"\.|_+|T", shortname)[4]
-        strdate = datetime.datetime.strptime(strdate, "%Y%m%d")
-        if (strdate >= gc_startdate) and (strdate <= gc_enddate):
-            sat_files.append(filename)
-    sat_files.sort()
-    print("Found", len(sat_files), "TROPOMI data files.")
+    if use_obspack:
+        files = get_obspack(gc_startdate, gc_enddate)
+    else:
+        files = get_tropomi(tropomi_cache, gc_startdate, gc_enddate)
 
     # Map GEOS-Chem to TROPOMI observation space
     # Also return Jacobian matrix if build_jacobian=True
-    def process(filename):
+    def process_tropomi(filename):
 
         # Check if TROPOMI file has already been processed
         print("========================")
@@ -197,5 +222,42 @@ if __name__ == "__main__":
             save_obj(viz_output, f"{vizdir}/{date}_GCtoTROPOMI.pkl")
         return 0
 
-    results = Parallel(n_jobs=-1)(delayed(process)(filename) for filename in sat_files)
+
+    def process_obspack(filename):
+        # Check if obspack file has already been processed
+        print("========================")
+        print(filename)
+        date = filename[-18:-10]
+
+        # If not yet processed, run apply_average_tropomi_operator()
+        if not os.path.isfile(f"{outputdir}/{date}_GCtoObsPack.pkl"):
+            print("Applying ObsPack operator...")
+            output = apply_obspack_operator(filename,
+                                            n_elements,
+                                            gc_startdate,
+                                            gc_enddate,
+                                            xlim,
+                                            ylim,
+                                            build_jacobian,
+                                            period_i,
+                                            config,
+                                            use_water_obs,
+                                            )
+
+            if output == None:
+                return 0
+        else:
+            return 0
+
+        if len(output) > 0:
+            print("Saving .pkl file")
+            save_obj(output, f"{outputdir}/{date}_GCtoObsPack.pkl")
+        return 0
+
+
+    if use_obspack:
+        results = Parallel(n_jobs=-1)(delayed(process_obspack)(filename) for filename in files)
+    else:
+        results = Parallel(n_jobs=-1)(delayed(process_tropomi)(filename) for filename in files)
+
     print(f"Wrote files to {outputdir}")
