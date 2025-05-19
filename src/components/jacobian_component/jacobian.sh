@@ -165,7 +165,7 @@ create_simulation_dir() {
 
 
     # Enable history output for base run
-    if [[ $x -eq 0 ]] || [[ "$UseObsPack" == true ]]; then
+    if [[ $x -eq 0 ]] && [[ "$UseObsPack" == true ]]; then
         sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
     fi
 
