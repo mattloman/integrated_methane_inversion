@@ -78,8 +78,13 @@ setup_template() {
         # based on grid cell edges (not centers) for the lat/lon bounds
         Lons=$(calculate_geoschem_domain lon ${RunDirs}/StateVector.nc ${LonMinInvDomain} ${LonMaxInvDomain})
         Lats=$(calculate_geoschem_domain lat ${RunDirs}/StateVector.nc ${LatMinInvDomain} ${LatMaxInvDomain})
-        sed -i -e "s:-130.0,  -60.0:${Lons}:g" \
-            -e "s:9.75,  60.0:${Lats}:g" geoschem_config.yml
+        if [ "$Res" = "0.25x0.3125" ]; then
+            sed -i -e "s:-130.0,  -60.0:${Lons}:g" \
+                -e "s:9.75,  60.0:${Lats}:g" geoschem_config.yml
+        else
+            sed -i -e "s:-140.0, -40.0:${Lons}:g" \
+                -e "s:10.0,  70.0:${Lats}:g" geoschem_config.yml    
+        fi          
     fi
 
     # Update time cycling flags to use most recent year

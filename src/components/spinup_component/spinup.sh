@@ -52,6 +52,11 @@ setup_spinup() {
             -e 's/LevelEdgeDiags.mode:        '\''time-averaged/LevelEdgeDiags.mode:        '\''instantaneous/g' HISTORY.rc
     fi
 
+    # Turn SpeciesConc output back on if using ObsPack
+    if [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
+    fi
+
     # Create run script from template
     sed -e "s:namename:${SpinupName}:g" \
         -e "s:##:#:g" ch4_run.template >${SpinupName}.run
