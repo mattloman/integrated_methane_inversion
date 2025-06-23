@@ -148,6 +148,8 @@ def do_inversion(
         # intensities from individual countries in the Middle East and North
         # Africa: implications for climate action"
         if csv_std:
+            obs_error = np.power(obs_GC[:, 5], 2)
+            gP = 1
 
         else:
             s_superO_1 = calculate_superobservation_error(obs_err, 1)
@@ -158,9 +160,10 @@ def do_inversion(
                 ]
             )
 
-        # Define observational errors (diagonal entries of S_o matrix)
-        obs_error = np.power(obs_err, 2)
-        gP = s_superO_p**2 / s_superO_1**2
+            # Define observational errors (diagonal entries of S_o matrix)
+            obs_error = np.power(obs_err, 2)
+            gP = s_superO_p**2 / s_superO_1**2
+
         # scale error variance by gP
         obs_error = gP * obs_error
 
