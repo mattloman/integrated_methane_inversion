@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 def get_std(GC_ObsPacks):
-    csv = pd.read_csv("../ObsPack_std.csv", index_col='obspack_id')
-    mapping = csv.to_dict()["std"]
+    csv = pd.read_csv("../ObsPack_std.csv", index_col='station')
+    mapping = csv.to_dict()["sd"]
 
     GC_ObsPacks["std"] = GC_ObsPacks["obspack_id"].astype(str)
     GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: x.strip().split("_")[0], GC_ObsPacks["std"], vectorize=True)
