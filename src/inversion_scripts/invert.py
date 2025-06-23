@@ -21,7 +21,8 @@ def do_inversion(
     prior_err_bc=0.0,
     prior_err_oh=0.0,
     is_Regional=True,
-    UseObsPack=False
+    UseObsPack=False,
+    csv_std=True,
 ):
     """
     After running jacobian.py, use this script to perform the inversion and save out results.
@@ -146,16 +147,23 @@ def do_inversion(
         # "Satellite quantification of methane emissions and oil/gas methane
         # intensities from individual countries in the Middle East and North
         # Africa: implications for climate action"
-        s_superO_1 = calculate_superobservation_error(obs_err, 1)
-        s_superO_p = np.array(
-            [
-                calculate_superobservation_error(obs_err, p) if p >= 1 else s_superO_1
-                for p in obs_GC[:, 4]
-            ]
-        )
-        # Define observational errors (diagonal entries of S_o matrix)
-        obs_error = np.power(obs_err, 2)
-        gP = s_superO_p**2 / s_superO_1**2
+        if csv_std:
+            obs_error = np.power(obs_GC[:, 5], 2)
+            gP = 1
+
+        else:
+            s_superO_1 = calculate_superobservation_error(obs_err, 1)
+            s_superO_p = np.array(
+                [
+                    calculate_superobservation_error(obs_err, p) if p >= 1 else s_superO_1
+                    for p in obs_GC[:, 4]
+                ]
+            )
+
+            # Define observational errors (diagonal entries of S_o matrix)
+            obs_error = np.power(obs_err, 2)
+            gP = s_superO_p**2 / s_superO_1**2
+
         # scale error variance by gP
         obs_error = gP * obs_error
 

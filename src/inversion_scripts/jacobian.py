@@ -116,7 +116,7 @@ if __name__ == "__main__":
     period_i = int(sys.argv[13])
     build_jacobian = sys.argv[14]
     viz_prior = sys.argv[15]
-    use_obspack = sys.argv[16]
+    use_obspack = sys.argv[16].lower() == "true"
     obspack_cache = sys.argv[17]
 
     # Reformat start and end days for datetime in configuration
