@@ -9,7 +9,7 @@ def get_std(GC_ObsPacks):
 
     GC_ObsPacks["std"] = GC_ObsPacks["obspack_id"].astype(str)
     GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: x.strip().split("_")[0], GC_ObsPacks["std"], vectorize=True)
-    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: mapping[x], GC_ObsPacks["std"], vectorize=True)
+    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: mapping[x[:3]], GC_ObsPacks["std"], vectorize=True)
 
     return GC_ObsPacks["std"]
 

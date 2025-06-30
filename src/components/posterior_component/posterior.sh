@@ -68,7 +68,7 @@ setup_posterior() {
     if [[ "$UseObsPack" == true ]]; then
         sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
         sed -i -e '/obspack:/,/^[^ ]/s/activate: false/activate: true/' \
-            -e "s|input_file: \./obspack_co2_1_OCO2MIP_2018-11-28\.YYYYMMDD\.nc|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
+            -e "s|input_file:.*|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
             geoschem_config.yml
     fi
 
