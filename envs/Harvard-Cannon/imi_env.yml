@@ -1,4 +1,4 @@
-name: imi_env
+name: IMI_GC_ENV
 channels:
 - conda-forge
 - nodefaults

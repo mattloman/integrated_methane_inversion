@@ -7,7 +7,7 @@ import xarray as xr
 from src.inversion_scripts.utils import load_obj, calculate_superobservation_error
 
 
-def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K):
+def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K, csv_std=True):
     """
     Description:
         This function is used to generate the full jacobian matrix (K), observations (y),
@@ -30,10 +30,11 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K):
         precomp_K [boolean]: whether or not to use precomputed jacobian matrices
     """
     # Get observed and GEOS-Chem-simulated TROPOMI columns
-    files = [f for f in np.sort(os.listdir(satdat_dir)) if "TROPOMI" in f]
+    files = [f for f in np.sort(os.listdir(satdat_dir)) if ".pkl" in f]
     # lat = np.array([])
     # lon = np.array([])
-    tropomi = np.array([])
+    # tropomi = np.array([])
+    obspack = np.array([])
     geos_prior = np.array([])
     so = np.array([])
     for i, f in enumerate(files):
@@ -60,7 +61,9 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K):
         obs_GC = obs_GC[ind[0], :]  # TROPOMI and GEOS-Chem data within bounds
 
         # concatenate full jacobian, obs, so, and prior
-        tropomi = np.concatenate((tropomi, obs_GC[:, 0]))
+        # ADD A LOGIC GATE HERE
+        # tropomi = np.concatenate((tropomi, obs_GC[:, 0]))
+        obspack = np.concatenate((obspack, obs_GC[:, 0]))
         geos_prior = np.concatenate((geos_prior, obs_GC[:, 1]))
 
         # read K from reference dir if precomp_K is true
@@ -78,18 +81,23 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K):
         else:
             K = np.append(K, K_temp, axis=0)
 
-        # calculate superobservation error
-        s_superO_1 = calculate_superobservation_error(obs_error, 1)
-        s_superO_p = np.array(
-            [
-                calculate_superobservation_error(obs_error, p) if p >= 1 else s_superO_1
-                for p in obs_GC[:, 4]
-            ]
-        )
-        # scale error variance by gP value following Chen et al. 2023
-        gP = s_superO_p**2 / s_superO_1**2
-        obs_error = obs_error**2
-        obs_error = gP * obs_error
+        if csv_std:
+            obs_error = np.power(obs_GC[:, 5], 2)
+            gP = 1
+
+        else:
+            s_superO_1 = calculate_superobservation_error(obs_err, 1)
+            s_superO_p = np.array(
+                [
+                    calculate_superobservation_error(obs_err, p) if p >= 1 else s_superO_1
+                    for p in obs_GC[:, 4]
+                ]
+            )
+
+            # Define observational errors (diagonal entries of S_o matrix)
+            obs_error = np.power(obs_err, 2)
+            gP = s_superO_p**2 / s_superO_1**2
+
 
         # check to make sure obs_err isn't negative, set 1 as default value
         obs_error = [obs if obs > 0 else 1 for obs in obs_error]
@@ -97,7 +105,7 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K):
 
     gc_ch4_prior = np.asmatrix(geos_prior)
 
-    obs_tropomi = np.asmatrix(tropomi)
+    obs_tropomi = np.asmatrix(obspack)
     return gc_ch4_prior, obs_tropomi, K, so
 
 
