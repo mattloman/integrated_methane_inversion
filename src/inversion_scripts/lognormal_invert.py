@@ -72,6 +72,9 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
     # the median prior emissions, but typically priors are the mean emission.
     # To account for this we convert xa to a median. This can be done by
     # scaling the lognormal part of K by 1/exp((lnsa**2)/2).
+    #   ML EDIT: xa is converted to a median by multiplying by 1/exp((lnsa^2)/2).
+    #            But K=dy/dx, and dx is what needs to be scaled, not dy.
+    #            K needs to be scaled by exp((lnsa^2)/2), so divide by scale factor
     # Here, we calculate this scaling factor
     prior_scale = 1 / np.exp((np.log(float(config["PriorError"])) ** 2) / 2)
 
@@ -79,7 +82,7 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
     # K_ROI is the matrix for the lognormal elements (the region of interest)
     # the lognormal part of K gets scaled by prior_scale to convert to median
     K_ROI = K_temp[:, :-num_normal_elems]
-    K_ROI = prior_scale * K_ROI
+    K_ROI = K_ROI / prior_scale
     K_normal = K_temp[:, -num_normal_elems:]
     K_full = np.concatenate((K_ROI, K_normal), axis=1)
 
