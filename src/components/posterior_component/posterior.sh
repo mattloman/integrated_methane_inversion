@@ -117,9 +117,14 @@ run_posterior() {
 
     if $LognormalErrors; then
         inversion_result_filename="inversion_result_ln.nc"
+        gridded_posterior_filename="gridded_posterior_ln.nc"
     else
         inversion_result_filename="inversion_result.nc"
+        gridded_posterior_filename="gridded_posterior.nc"
     fi
+
+    # make sure scaling factor line matches gridded posterior listed in config.yml
+    sed -i -e "s|${RunDirs}/inversion/gridded_posterior.\{0,3\}.nc|${RunDirs}/inversion/${gridded_posterior_filename}|g" HEMCO_Config.rc
 
     printf "\n=== SETTING UP POSTERIOR OPTIMIZATION ===\n"
 
