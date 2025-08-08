@@ -300,6 +300,8 @@ def apply_obspack_operator(
 
             # calculate difference
             delta_xch4 = pert_jacobian_xch4 - base_xch4
+            # remove any negative values. perturbed xch4 should never be greater than base_xch4.
+            delta_xch4 = np.maximum(delta_xch4, 0)
 
             # calculate sensitivities
             sensi_xch4 = delta_xch4 / perturbations
