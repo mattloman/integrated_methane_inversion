@@ -88,8 +88,9 @@ def apply_obspack_operator(
 
     # At a later date include a gc_cache like work up but this is ok for now.
     jacobian_dir = "../jacobian_runs"
-    GC_dirs = sorted([os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if config["RunName"] in x])
+    GC_dirs = sorted([os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if config["RunName"] in x and "background" not in x])
     GC_dirs.sort()
+    GC_bkgd = [os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if "background" in x]
 
     output_path = os.path.join("OutputDir", ObsPack_name)
     GC_paths = [os.path.join(x, output_path) for x in GC_dirs]
@@ -104,6 +105,15 @@ def apply_obspack_operator(
         pack = pack[["CH4"]]
         pack = pack.rename({"CH4": f"CH4_{'base' if i == 0 else 'base_emis'}"})
         GC_ObsPacks.append(pack)
+
+     if config["LognormalErrors"]:
+         path = os.path.join(GC_bkgd[0], output_path)
+         print(path)
+         pack = xr.open_dataset(path)
+         pack = pack[["CH4"]]
+         pack = pack.rename({"CH4": "CH4_base"})
+         # replace CH4_base with values from background run
+         GC_ObsPacks[0] = pack
 
     #GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id"]]) # Merge the observation values.
     GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id", "id3char"]]) # Merge the observation values.
