@@ -106,14 +106,14 @@ def apply_obspack_operator(
         pack = pack.rename({"CH4": f"CH4_{'base' if i == 0 else 'base_emis'}"})
         GC_ObsPacks.append(pack)
 
-     if config["LognormalErrors"]:
-         path = os.path.join(GC_bkgd[0], output_path)
-         print(path)
-         pack = xr.open_dataset(path)
-         pack = pack[["CH4"]]
-         pack = pack.rename({"CH4": "CH4_base"})
-         # replace CH4_base with values from background run
-         GC_ObsPacks[0] = pack
+    if config["LognormalErrors"]:
+        path = os.path.join(GC_bkgd[0], output_path)
+        print(path)
+        pack = xr.open_dataset(path)
+        pack = pack[["CH4"]]
+        pack = pack.rename({"CH4": "CH4_base"})
+        # replace CH4_base with values from background run
+        GC_ObsPacks[0] = pack
 
     #GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id"]]) # Merge the observation values.
     GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id", "id3char"]]) # Merge the observation values.
