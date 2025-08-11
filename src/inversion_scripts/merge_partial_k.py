@@ -33,7 +33,7 @@ def calc_so(obs_error, obs_GC):
 from functools import partial
 print = partial(print, flush = True)
 
-def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
+def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_err, precomp_K, csv_std=True):
     """
     Description:
         This function is used to generate the full jacobian matrix (K), observations (y),
@@ -56,7 +56,7 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
         precomp_K [boolean]: whether or not to use precomputed jacobian matrices
     """
     # Get observed and GEOS-Chem-simulated TROPOMI columns
-    files = [f for f in np.sort(os.listdir(satdat_dir)) if "TROPOMI" in f]
+    files = [f for f in np.sort(os.listdir(satdat_dir)) if ".pkl" in f]
 
     # Initialize dictionary to store observational errors
     so_dict = {}
@@ -66,6 +66,7 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
     tropomi_list = [None for i in range(len(files))]
     geos_prior_list = [None for i in range(len(files))]
     K_list = [None for i in range(len(files))]
+    obspack = [None for i in range(len(files))]
 
     for i, f in enumerate(files):
         # Get paths
@@ -90,7 +91,9 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
         obs_GC = obs_GC[ind[0], :]  # TROPOMI and GEOS-Chem data within bounds
 
         # concatenate full jacobian, obs, so, and prior
-        tropomi_list[i] = obs_GC[:, 0]
+        # ADD A LOGIC GATE HERE
+        #tropomi_list[i] = obs_GC[:, 0]
+        obspack[i] = obs_GC[:, 0]
         geos_prior_list[i] = obs_GC[:, 1]
 
         # read K from reference dir if precomp_K is true
@@ -103,9 +106,16 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
             K_temp = obj["K"][ind[0]]
             K_list[i] = K_temp
 
+        if csv_std:
+            obs_error = np.power(obs_GC[:, 5], 2)
+            gP = 1
+            
         for obs_err in obs_errs:
             key = f"so_{obs_err}"
-            obs_error = calc_so(obs_err, obs_GC)
+            if csv_std:
+                obs_error = np.power(obs_GC[:, 5], 2)
+            else:
+                obs_error = calc_so(obs_err, obs_GC)
             so_dict[key][i] = obs_error
 
     K = np.concatenate(K_list, axis=0)
@@ -118,7 +128,6 @@ def merge_partial_k(satdat_dir, lat_bounds, lon_bounds, obs_errs, precomp_K):
     obs_tropomi = np.asmatrix(tropomi)
 
     return gc_ch4_prior, obs_tropomi, K, so_dict
-
 
 if __name__ == "__main__":
     # read in arguments

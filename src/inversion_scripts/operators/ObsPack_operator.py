@@ -9,7 +9,7 @@ def get_std(GC_ObsPacks):
 
     GC_ObsPacks["std"] = GC_ObsPacks["obspack_id"].astype(str)
     GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: x.strip().split("_")[0], GC_ObsPacks["std"], vectorize=True)
-    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: mapping[x], GC_ObsPacks["std"], vectorize=True)
+    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: mapping[x[:3]], GC_ObsPacks["std"], vectorize=True)
 
     return GC_ObsPacks["std"]
 
@@ -58,8 +58,8 @@ def apply_obspack_operator(
     # filename = "../obspack_data/GEOSChem.ObsPack.20180501_0000z.nc4"
     # config = {}
     # period_i = 1
-    # config["RunName"] = "NY_2018"
-    # config["OutputPath"] = "../"
+    # config["RunName"] = "NY_CT_final_all_2018"
+    # config["OutputPath"] = "../../"
     # build_jacobian = True
     # n_elements = 261
     # ntracers = 2
@@ -67,6 +67,7 @@ def apply_obspack_operator(
     # config["PerturbValueBCs"] = 10
     # config["OptimizeBCs"] = True
     # config["isRegional"] = True
+    # config["LognormalErrors"] = True
     # Read dataded
 
     print(f"Working up: {filename}")
@@ -75,6 +76,9 @@ def apply_obspack_operator(
     is_Regional = config["isRegional"]
 
     ObsPack = xr.open_dataset(filename)
+    # add 3-character ID for station filtering
+    ObsPack["id3char"] = ObsPack["obspack_id"].astype(str)
+    ObsPack["id3char"] = xr.apply_ufunc(lambda x: x[:3], ObsPack["id3char"], vectorize=True)
 
     ObsPack_name = filename.split("/")[-1] #Would be nice to get the file name and path seperate. This is back to front.
 
@@ -84,8 +88,9 @@ def apply_obspack_operator(
 
     # At a later date include a gc_cache like work up but this is ok for now.
     jacobian_dir = "../jacobian_runs"
-    GC_dirs = sorted([os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if config["RunName"] in x])
+    GC_dirs = sorted([os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if config["RunName"] in x and "background" not in x])
     GC_dirs.sort()
+    GC_bkgd = [os.path.join(jacobian_dir,x) for x in os.listdir(jacobian_dir) if "background" in x]
 
     output_path = os.path.join("OutputDir", ObsPack_name)
     GC_paths = [os.path.join(x, output_path) for x in GC_dirs]
@@ -101,7 +106,17 @@ def apply_obspack_operator(
         pack = pack.rename({"CH4": f"CH4_{'base' if i == 0 else 'base_emis'}"})
         GC_ObsPacks.append(pack)
 
-    GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id"]]) # Merge the observation values.
+    if config["LognormalErrors"]:
+        path = os.path.join(GC_bkgd[0], output_path)
+        print(path)
+        pack = xr.open_dataset(path)
+        pack = pack[["CH4"]]
+        pack = pack.rename({"CH4": "CH4_base"})
+        # replace CH4_base with values from background run
+        GC_ObsPacks[0] = pack
+
+    #GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id"]]) # Merge the observation values.
+    GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id", "id3char"]]) # Merge the observation values.
     GC_ObsPacks = xr.merge(GC_ObsPacks)
 
     grid_lats = grid_data["lat"].values
@@ -128,6 +143,7 @@ def apply_obspack_operator(
             pack = pack.rename({"CH4": str(n_elements-(3-i)).zfill(4)})
             jacobian_ObsPack.append(pack)
 
+    # add ID so we can subset by ID
     jacobian_ObsPack.append(ObsPack[["value", "time", "latitude", "longitude"]])
 
     jacobian_ObsPack = xr.merge(jacobian_ObsPack)
@@ -144,10 +160,19 @@ def apply_obspack_operator(
     #GC_ObsPacks_hour = GC_ObsPacks.isel(obs=hour_filter)
     #jacobian_ObsPack_hour = jacobian_ObsPack.isel(obs=hour_filter)
 
-    # Nan filter
-    nan_filter = ~np.isnan(GC_ObsPacks["value"].values)
+    # Nan / zero filter
+    nan_filter = np.logical_and(~np.isnan(GC_ObsPacks["value"].values), GC_ObsPacks["value"].values > 0)
     GC_ObsPacks = GC_ObsPacks.isel(obs=nan_filter)
     jacobian_ObsPack = jacobian_ObsPack.isel(obs=nan_filter)
+
+    # measurement ID filter
+    # remove observations with the obspack IDs listed
+    #id_filter = ~np.isin(GC_ObsPacks["id3char"].values,
+    #                     ["ACT", "CON", "DNH", "DWS", "ECO", "HFM", "IAG", "NHA", "PSP", "TMD", "UNY", "WHT"]) # planeflights + pos mean bias
+    #                     ["CON", "DNH", "DWS", "HFM", "IAG", "NHA", "PSP", "TMD", "UNY", "WHT"]) # sites with positive mean bias (model > obs)
+    #                     ["ACT", "CON", "ECO", "IAG", "NHA"]) # planeflights
+    GC_ObsPacks = GC_ObsPacks.isel(obs=id_filter)
+    jacobian_ObsPack = jacobian_ObsPack.isel(obs=id_filter)
 
     if csv_std:
         GC_ObsPacks["std"] = get_std(GC_ObsPacks)
@@ -275,6 +300,8 @@ def apply_obspack_operator(
 
             # calculate difference
             delta_xch4 = pert_jacobian_xch4 - base_xch4
+            # remove any negative values. perturbed xch4 should never be greater than base_xch4.
+            delta_xch4 = np.maximum(delta_xch4, 0)
 
             # calculate sensitivities
             sensi_xch4 = delta_xch4 / perturbations

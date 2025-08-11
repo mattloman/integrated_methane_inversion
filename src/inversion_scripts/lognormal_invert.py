@@ -77,7 +77,8 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         int(state_vector_labels.max().item()) + BC_element_num + OH_element_num
     )
     num_buffer_elems = int(config["nBufferClusters"])
-    num_normal_elems = num_buffer_elems + BC_element_num + OH_element_num
+    #num_normal_elems = num_buffer_elems + OH_element_num + BC_element_num
+    num_normal_elems = OH_element_num + BC_element_num
     ds = np.load("full_jacobian_K.npz")
     K_temp = np.array(ds["K"]) * 1e9
 
@@ -143,6 +144,9 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         # the median prior emissions, but typically priors are the mean emission.
         # To account for this we convert xa to a median. This can be done by
         # scaling the lognormal part of K by 1/exp((lnsa**2)/2).
+        #   ML EDIT: xa is converted to a median by multiplying by 1/exp((lnsa^2)/2).
+        #            But K=dy/dx, and dx is what needs to be scaled, not dy.
+        #            K needs to be scaled by exp((lnsa^2)/2), so divide by scale factor
         # Here, we calculate this scaling factor
         prior_scale = 1 / np.exp((np.log(float(sa)) ** 2) / 2)
 
@@ -151,7 +155,7 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         # the lognormal part of K gets scaled by prior_scale to convert to median
         K_ROI = K_temp[:, :-num_normal_elems]
         K_normal = K_temp[:, -num_normal_elems:]
-        K_ROI = prior_scale * K_ROI
+        K_ROI = K_ROI / prior_scale
         K_full = np.concatenate((K_ROI, K_normal), axis=1)
 
         m, n = np.shape(K_ROI)
@@ -165,7 +169,7 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         # Create normal elements for buffer, BCs, and OH
         # BC elements are relative to 0 because they are in concentration space
         # Other elements are in scale factor space where 1 is the prior
-        xa_normal_buffer = np.ones((num_buffer_elems, 1)) * 1.0
+        xa_normal_buffer = np.ones((0, 1)) * 1.0 # ML EDIT: swapped in 0 for num_buffer_elems: xa_normal_buffer = np.ones((num_buffer_elems, 1)) * 1.0
         xa_normal_BCs = np.ones((BC_element_num, 1)) * 0.0
         xa_normal_OH = np.ones((OH_element_num, 1)) * 1.0
         xa_normal = np.concatenate(
@@ -186,7 +190,10 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
 
         # Create lnSa matrix
         # lnsa = lnsa_val**2 * np.ones((n, 1))
-        lnsa = lnsa_val**2 * np.ones((n, 1))
+        nROI = n - num_buffer_elems
+        lnsa = lnsa_val**2 * np.ones((nROI, 1))
+        lnbuff = np.log(sa_buffer)**2 * np.ones((num_buffer_elems, 1))
+        lnsa = np.concatenate((lnsa, lnbuff), axis=0)
 
         # For the buffer elems, BCs, and OH elements
         # we apply a different Sa value
@@ -196,7 +203,7 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         )
 
         # conditionally add BC and OH elements
-        if optimize_bcs:
+        if optimize_bcs and optimize_oh:
             bc_errors = sa_bc**2 * np.ones((BC_element_num, 1))
             base_sa_normal = np.concatenate((base_sa_normal, bc_errors), axis=0)
             
@@ -241,15 +248,19 @@ def lognormal_invert(config, state_vector_filepath, jacobian_sf):
         print("Status: Iterating to calculate ln(xn)")
         while xn_iteration_pct_diff >= convergence_threshold:
 
-            # we need to transform lnxn to xn to calculate K_prime
-            xn = np.concatenate(
-                (np.exp(lnxn[:-num_normal_elems]), lnxn[-num_normal_elems:]),
-                axis=0,
-            )
-            # K_prime is the updated jacobian using the new xn from the previous iteration
-            K_prime = np.concatenate(
-                (K_ROI * xn[:-num_normal_elems].T, K_normal), axis=1
-            )
+            if num_normal_elems == 0:
+                xn = np.exp(lnxn)
+                K_prime = K_ROI * xn.T
+            else:
+                # we need to transform lnxn to xn to calculate K_prime
+                xn = np.concatenate(
+                    (np.exp(lnxn[:-num_normal_elems]), lnxn[-num_normal_elems:]),
+                    axis=0,
+                )
+                # K_prime is the updated jacobian using the new xn from the previous iteration
+                K_prime = np.concatenate(
+                    (K_ROI * xn[:-num_normal_elems].T, K_normal), axis=1
+                )
 
             # commonly used term for term1 and term3
             gamma_K_prime_transpose_Soinv = gamma * K_prime.T @ Soinv
