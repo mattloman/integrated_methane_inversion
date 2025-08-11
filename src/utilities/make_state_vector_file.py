@@ -146,6 +146,8 @@ def make_state_vector_file(
             deg_lat, deg_lon = 0.5, 0.625
         elif config["Res"] == "0.25x0.3125":
             deg_lat, deg_lon = 0.25, 0.3125
+        elif config["Res"] == "0.125x0.15625":
+            deg_lat, deg_lon = 0.125, 0.15625
         buffer_min_lat = deg_lat * 3
         buffer_min_lon = deg_lon * 3
 
@@ -164,7 +166,7 @@ def make_state_vector_file(
         lc = np.round( -(lc/100.-1), decimals=5)
     else:
         lc = (lc["FRLAKE"] + lc["FRLAND"] + lc["FRLANDIC"]).drop_vars("time").squeeze()
-    hd = (hd["EmisCH4_Oil"] + hd["EmisCH4_Gas"]).drop_vars("time").squeeze()
+    hd = hd["EmisCH4_Total"].mean(dim="time")
 
     # Check compatibility of region of interest
     if is_regional:
