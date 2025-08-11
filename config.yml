@@ -113,15 +113,15 @@ Met: "GEOSFP"
 RunSetup: true
 SetupObsPack: true
 SetupTemplateRundir: true
-SetupSpinupRun: false
-SetupJacobianRuns: false
-SetupInversion: false
-SetupPosteriorRun: false
+SetupSpinupRun: true
+SetupJacobianRuns: true
+SetupInversion: true
+SetupPosteriorRun: true
 
 ## Run modules
 ##   Turn on/off different steps in performing the inversion
 DoHemcoPriorEmis: true
-DoSpinup: false
+DoSpinup: true
 DoJacobian: false
 ReDoJacobian: false
 DoInversion: false
@@ -220,12 +220,12 @@ RestartDownload: true
 
 ## Path to initial GEOS-Chem restart file + prefix
 ##   ("YYYYMMDD_0000z.nc4" will be appended)
-RestartFilePrefix: "/scratch/mloman/gc/boundary-conditions-imi/v2023-06/GEOSChem.BoundaryConditions."
+RestartFilePrefix: "/scratch/mloman/gc/boundary-conditions-imi/CTCH4_2025_NA/GEOSChem.BoundaryConditions."
 
 ## Path to GEOS-Chem boundary condition files (for regional simulations)
 ## BCversion will be appended to the end of this path. ${BCpath}/${BCversion}
 BCpath: "/scratch/mloman/gc/boundary-conditions-imi"
-BCversion: "v2024-06"
+BCversion: "CTCH4_2025_NA"
 
 ## Options to download missing GEOS-Chem input data from AWS S3
 HemcoPriorEmisDryRun: false
