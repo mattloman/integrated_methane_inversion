@@ -84,8 +84,8 @@ run_spinup() {
     cd ${RunDirs}/spinup_run
 
     # Submit job to job scheduler
-    sbatch --mem $RequestedMemory \
-        -c $RequestedCPUs \
+    sbatch --mem $GC_Memory \
+        -c $GC_CPUs \
         -t $RequestedTime \
         -p $SchedulerPartition \
         -W ${RunName}_Spinup.run

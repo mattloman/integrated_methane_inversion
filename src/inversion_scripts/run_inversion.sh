@@ -83,35 +83,38 @@ fi
 #=======================================================================
 # Postprocess the SpeciesConc and LevelEdgeDiags files from GEOS-Chem
 #=======================================================================
+if [ "$UseObsPack" = "false" ]; then
 
-printf "Calling postproc_diags.py, FSS=$FirstSimSwitch\n"
-if "$FirstSimSwitch"; then
-    if [[ ! -d ${SpinupDir} ]]; then
-	printf "${SpinupDir} does not exist. Please fix SpinupDir or set FirstSimSwitch to False in run_inversion.sh.\n"
-	exit 1
+    printf "Calling postproc_diags.py, FSS=$FirstSimSwitch\n"
+    if "$FirstSimSwitch"; then
+        if [[ ! -d ${SpinupDir} ]]; then
+        printf "${SpinupDir} does not exist. Please fix SpinupDir or set FirstSimSwitch to False in run_inversion.sh.\n"
+        exit 1
+        fi
+        PrevDir=$SpinupDir
+    else
+        PrevDir=$PosteriorRunDir
+        if [[ ! -d ${PosteriorRunDir} ]]; then
+        printf "${PosteriorRunDir} does not exist. Please fix PosteriorRunDir in run_inversion.sh.\n"
+        exit 1
+        fi
     fi
-    PrevDir=$SpinupDir
-else
-    PrevDir=$PosteriorRunDir
-    if [[ ! -d ${PosteriorRunDir} ]]; then
-	printf "${PosteriorRunDir} does not exist. Please fix PosteriorRunDir in run_inversion.sh.\n"
-	exit 1
-    fi
-fi
-printf "  - Hour 0 for ${StartDate} will be obtained from ${PrevDir}\n"
+    printf "  - Hour 0 for ${StartDate} will be obtained from ${PrevDir}\n"
 
-if ! "$PrecomputedJacobian"; then
 
-    # Postprocess all the Jacobian simulations
-    python postproc_diags.py $RunName $JacobianRunsDir $PrevDir $StartDate $Res; wait
+    if ! "$PrecomputedJacobian"; then
 
-else
+            # Postprocess all the Jacobian simulations
+            python postproc_diags.py $RunName $JacobianRunsDir $PrevDir $StartDate $Res; wait
 
-    # Only postprocess the Prior simulation
-    python postproc_diags.py $RunName $PriorRunDir $PrevDir $StartDate $Res; wait
-    if "$LognormalErrors"; then
-        # for lognormal errors we need to postprocess the background run too
-        python postproc_diags.py $RunName $BackgroundRunDir $PrevDir $StartDate $Res; wait
+        else
+
+            # Only postprocess the Prior simulation
+            python postproc_diags.py $RunName $PriorRunDir $PrevDir $StartDate $Res; wait
+            if "$LognormalErrors"; then
+                # for lognormal errors we need to postprocess the background run too
+                python postproc_diags.py $RunName $BackgroundRunDir $PrevDir $StartDate $Res; wait
+        fi
     fi
 fi
 printf "DONE -- postproc_diags.py\n\n"
@@ -119,22 +122,22 @@ printf "DONE -- postproc_diags.py\n\n"
 #=======================================================================
 # Setup GC data directory in workdir
 #=======================================================================
+if [ "$UseObsPack" = "false" ]; then
+    printf "Calling setup_gc_cache.py\n"
+    if "$LognormalErrors"; then
+        # for lognormal errors we use the clean background run
+        GCsourcepth="${BackgroundRunDir}/OutputDir"
+        PriorOutputDir="${PriorRunDir}/OutputDir"
+        # also need the prior cache so that we can visualize the prior simulation
+        python setup_gc_cache.py $StartDate $EndDate $PriorOutputDir $GCVizDir; wait
+    else
+        # for normal errors we use the prior run
+        GCsourcepth="${PriorRunDir}/OutputDir"
+    fi
 
-printf "Calling setup_gc_cache.py\n"
-if "$LognormalErrors"; then
-    # for lognormal errors we use the clean background run
-    GCsourcepth="${BackgroundRunDir}/OutputDir"
-    PriorOutputDir="${PriorRunDir}/OutputDir"
-    # also need the prior cache so that we can visualize the prior simulation
-    python setup_gc_cache.py $StartDate $EndDate $PriorOutputDir $GCVizDir; wait
-else
-    # for normal errors we use the prior run
-    GCsourcepth="${PriorRunDir}/OutputDir"
+    python setup_gc_cache.py $StartDate $EndDate $GCsourcepth $GCDir; wait
+    printf "DONE -- setup_gc_cache.py\n\n"
 fi
-
-python setup_gc_cache.py $StartDate $EndDate $GCsourcepth $GCDir; wait
-printf "DONE -- setup_gc_cache.py\n\n"
-
 #=======================================================================
 # Generate Jacobian matrix files 
 #=======================================================================
@@ -153,11 +156,11 @@ else
 
 fi
 
-python jacobian.py ${invPath}/${configFile} $StartDate $EndDate $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI $UseWaterObs $isPost $period_i $buildJacobian False; wait
+python jacobian.py ${invPath}/${configFile} $StartDate $EndDate $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI $UseWaterObs $isPost $period_i $buildJacobian False $UseObsPack $DataPathObsPack; wait
 if "$LognormalErrors"; then
     # for lognormal error visualization of the prior we sample the prior run
     # without constructing the jacobian matrix
-    python jacobian.py ${invPath}/${configFile} $StartDate $EndDate $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI  $UseWaterObs $isPost $period_i False True; wait
+    python jacobian.py ${invPath}/${configFile} $StartDate $EndDate $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI  $UseWaterObs $isPost $period_i False True $UseObsPack $DataPathObsPack; wait
 fi
 printf " DONE -- jacobian.py\n\n"
 

@@ -24,6 +24,7 @@ source src/components/jacobian_component/jacobian.sh
 source src/components/inversion_component/inversion.sh
 source src/components/posterior_component/posterior.sh
 source src/components/kalman_component/kalman.sh
+source src/components/obspack_component/obspack.sh
 
 # trap and exit on errors
 trap 'imi_failed $LINENO' ERR

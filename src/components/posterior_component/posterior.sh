@@ -64,6 +64,11 @@ setup_posterior() {
         -e "s|gridded_posterior.nc|${RunDirs}/inversion/${gridded_posterior_filename}|g" \
         -e "s|GFED                   : on|GFED                   : off|g" HEMCO_Config.rc
 
+    # Re-enable History output for ObsPack simulation.
+    if [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
+    fi
+
     # Turn on LevelEdgeDiags output
     # Output daily restarts to avoid trouble at month boundaries
     if "$HourlyCH4"; then
@@ -173,8 +178,8 @@ run_posterior() {
 
     # Submit job to job scheduler
     printf "\n=== SUBMITTING POSTERIOR SIMULATION ===\n"
-    sbatch --mem $RequestedMemory \
-        -c $RequestedCPUs \
+    sbatch --mem $GC_Memory \
+        -c $GC_CPUs \
         -t $RequestedTime \
         -p $SchedulerPartition \
         -W ${RunName}_Posterior.run
@@ -235,7 +240,7 @@ run_posterior() {
     kf_period=1
 
     printf "\n=== Calling jacobian.py to sample posterior simulation (without jacobian sensitivity analysis) ===\n"
-    python ${InversionPath}/src/inversion_scripts/jacobian.py ${ConfigPath} $StartDate_i $EndDate_i $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI $UseWaterObs $isPost $kf_period $buildJacobian False
+    python ${InversionPath}/src/inversion_scripts/jacobian.py ${ConfigPath} $StartDate_i $EndDate_i $LonMinInvDomain $LonMaxInvDomain $LatMinInvDomain $LatMaxInvDomain $nElements $tropomiCache $BlendedTROPOMI $UseWaterObs $isPost $kf_period $buildJacobian False $UseObsPack $DataPathObsPack
     wait
     printf "\n=== DONE sampling the posterior simulation ===\n\n"
     posterior_end=$(date +%s)

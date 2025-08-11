@@ -29,6 +29,7 @@ def do_inversion(
     prior_err_oh=0.0,
     is_Regional=True,
     verbose=False,
+    UseObsPack=False
 ):
     """
     After running jacobian.py, use this script to perform the inversion and save out results.

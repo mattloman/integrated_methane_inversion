@@ -153,6 +153,11 @@ setup_template() {
             -e 's/SpeciesConc.mode:           '\''time-averaged/SpeciesConc.mode:           '\''instantaneous/g' HISTORY.rc
     fi
 
+    # Disable history output if using ObsPack.
+    if [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/'\''SpeciesConc/#'\''SpeciesConc/g' HISTORY.rc
+    fi
+
     # Remove sample restart file
     rm -f Restarts/GEOSChem.Restart.20190101_0000z.nc4
 
@@ -167,7 +172,16 @@ setup_template() {
     cd build
     cmake ${InversionPath}/GCClassic >>build_geoschem.log 2>&1
     cmake . -DRUNDIR=.. >>build_geoschem.log 2>&1
-    make -j install >>build_geoschem.log 2>&1
+
+    # Submit job to job scheduler
+    sbatch --mem $GC_Memory \
+        -c $GC_CPUs \
+        -t $RequestedTime \
+        -p $SchedulerPartition \
+        -J BuildGC \
+        -W \
+        --wrap="make -j install" >>build_geoschem.log 2>&1
+
     cd ..
     if [[ -f gcclassic ]]; then
         rm -rf build

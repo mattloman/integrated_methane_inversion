@@ -163,6 +163,13 @@ create_simulation_dir() {
         fi
     fi
 
+
+    # Enable history output for base run
+    if [[ $x -eq 0 ]] && [[ "$UseObsPack" == true ]]; then
+        sed -i -e 's/#'\''SpeciesConc/'\''SpeciesConc/g' HISTORY.rc
+    fi
+
+
     # Update settings in HISTORY.rc
     # Only save out hourly pressure fields to daily files for base run
     if [[ $x -eq 0 ]] || [[ "$x" = "background" ]]; then
@@ -321,6 +328,14 @@ create_simulation_dir() {
             done
         fi
     fi
+
+    # Turn on Obspack diagnostic if using ObsPack
+    if [[ "$UseObsPack" == true ]]; then
+        sed -i -e '/obspack:/,/^[^ ]/s/activate: false/activate: true/' \
+            -e "s|input_file: \./obspack_co2_1_OCO2MIP_2018-11-28\.YYYYMMDD\.nc|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
+            geoschem_config.yml
+    fi
+
 
     # Navigate back to top-level directory
     cd ../..
