@@ -46,17 +46,18 @@ def apply_obspack_operator(
     """
 
     # # Tempoary variables for testing
-    filename = "../obspack_data/GEOSChem.ObsPack.20180501_0000z.nc4"
-    config = {}
-    period_i = 1
-    config["RunName"] = "NY_2018"
-    config["OutputPath"] = "../"
-    build_jacobian = True
-    n_elements = 261
-    ntracers = 2
-    config["OptimizeBCs"] = True
-    config["PerturbValueBCs"] = 10
-    # Read dataded
+    #filename = "../obspack_data/GEOSChem.ObsPack.20180501_0000z.nc4"
+    #config = {}
+    #period_i = 1
+    #config["RunName"] = "NY_2018"
+    #config["OutputPath"] = "../"
+    #build_jacobian = True
+    #n_elements = 261
+    #ntracers = 2
+    #config["OptimizeBCs"] = True
+    #config["PerturbValueBCs"] = 10
+
+    # Read data
 
     print(f"Working up: {filename}")
 

@@ -331,8 +331,9 @@ create_simulation_dir() {
 
     # Turn on Obspack diagnostic if using ObsPack
     if [[ "$UseObsPack" == true ]]; then
+        #    -e "s|input_file: \./obspack_co2_1_OCO2MIP_2018-11-28\.YYYYMMDD\.nc|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
         sed -i -e '/obspack:/,/^[^ ]/s/activate: false/activate: true/' \
-            -e "s|input_file: \./obspack_co2_1_OCO2MIP_2018-11-28\.YYYYMMDD\.nc|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
+            -e "s|input_file: \./obspack_input_for_testing.20190701.nc|input_file: ${RunDirs}/obspack_data/GEOSChem.ObsPack.YYYYMMDD_0000z.nc4|" \
             geoschem_config.yml
     fi
 
