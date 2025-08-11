@@ -2,12 +2,18 @@
 ## Documentation @ https://imi.readthedocs.io/en/latest/getting-started/imi-config-file.html
 
 ## General
+<<<<<<< HEAD
 RunName: "NY_2018_3MONTH"
+=======
+RunName: "NY_2018"
+isAWS: false
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 UseSlurm: true
 SafeMode: false
 S3Upload: false
 
 ## Period of interest
+<<<<<<< HEAD
 StartDate: 20180501
 EndDate: 20180801
 SpinupMonths: 1
@@ -17,6 +23,17 @@ BlendedTROPOMI: false
 
 ## Use observations over water? Set to false to filter out water observations
 UseWaterObs: false
+=======
+StartDate: 20180101
+EndDate: 20181201
+SpinupMonths: 1
+
+## Use blended TROPOMI+GOSAT data (true)? Or use operational TROPOMI data (false)?
+BlendedTROPOMI: true
+
+## Use observations over water? Set to false to filter out water observations
+UseWaterObs: true
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ## Is this a regional inversion? Set to false for global inversion
 isRegional: true
@@ -77,10 +94,17 @@ ForcedNativeResolutionElements:
   - [31.5, -104]
 EmissionRateFilter: 2500
 PlumeCountFilter: 50
+<<<<<<< HEAD
 GroupByCountry: false
 
 ## Custom state vector
 StateVectorFile: "/scratch/mloman/gc/imi-v2.2.0/NYStateVector.nc"
+=======
+GroupByCountry: true
+
+## Custom state vector
+StateVectorFile: "/scratch/mloman/gc/imi-v2.0.0/NYStateVector.nc"
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 ShapeFile: "/scratch/mloman/apriori/qgis/Boundaries/tl_2023_us_state/NYS_only.gpkg"
 
 ## Inversion
@@ -91,6 +115,7 @@ ShapeFile: "/scratch/mloman/apriori/qgis/Boundaries/tl_2023_us_state/NYS_only.gp
 ## - PriorErrorBCs is in ppb
 ## - PriorErrorBufferElements is only used if LognormalErrors is true
 LognormalErrors: false
+<<<<<<< HEAD
 PriorError: [0.5]
 PriorErrorBCs: [10.0]
 PriorErrorBufferElements: [0.5]
@@ -102,6 +127,23 @@ PrecomputedJacobian: false
 ## Grid
 ##   Options are 0.125x0.15625 (GEOS-FP only), 0.25x0.3125 (GEOS-FP only),
 ##   0.5x0.625, 2.0x2.5, or 4.0x5.0
+=======
+PriorError: 0.5
+PriorErrorBCs: 10.0
+PriorErrorBufferElements: 0.5
+PriorErrorOH: 0.1
+ObsError: 15
+Gamma: 1.0
+PrecomputedJacobian: false
+
+## Link existing HEMCO standalone output
+## NOTE: must set DoHemcoPriorEmis:true to link
+LinkHemco: true
+HemcoStandaloneOutputDir: "/scratch/mloman/gc/rundirs/hemco_standalone/3.9.2/hemco_NYregion_geosfp/OutputDir"
+
+## Grid
+##   Options are 0.25x0.3125 (GEOSFP only), 0.5x0.625, 2.0x2.5, or 4.0x5.0
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 Res: "0.25x0.3125"
 
 ## Meteorology
@@ -114,18 +156,32 @@ RunSetup: true
 SetupObsPack: true
 SetupTemplateRundir: true
 SetupSpinupRun: true
+<<<<<<< HEAD
 SetupJacobianRuns: true
 SetupInversion: true
 SetupPosteriorRun: true
+=======
+SetupJacobianRuns: false
+SetupInversion: false
+SetupPosteriorRun: false
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ## Run modules
 ##   Turn on/off different steps in performing the inversion
 DoHemcoPriorEmis: true
+<<<<<<< HEAD
 DoSpinup: true
 DoJacobian: false
 ReDoJacobian: false
 DoInversion: false
 DoPosterior: false
+=======
+DoSpinup: false
+DoJacobian: false
+ReDoJacobian: false
+DoInversion: true
+DoPosterior: true
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ## IMI preview
 ##   NOTE: RunSetup must be true to run preview
@@ -133,16 +189,27 @@ DoPreview: false
 DOFSThreshold: 0
 
 ## Slurm general resource settings.
+<<<<<<< HEAD
 RequestedTime: "0-2:00"
+=======
+RequestedTime: "0-24:00"
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 SchedulerPartition: "atmos"
 
 ## Job specific resource allocation for:
 ## Jacobian ensemble (array job)
 RequestedCPUs: 1
+<<<<<<< HEAD
 RequestedMemory: 7000
 ## Compiling GC and running the spin up, prosterior and HEMCO simulations.
 GC_CPUs: 16
 GC_Memory: 36000
+=======
+RequestedMemory: 3500
+## Compiling GC and running the spin up, prosterior and HEMCO simulations.
+GC_CPUs: 12
+GC_Memory: 24000
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 ## Building jacobian and running inversion.
 InversionCPUs: 36
 InversionMemory: 124000
@@ -154,7 +221,11 @@ MaxSimultaneousRuns: -1
 ##   Specifying a value = 1 will submit a separate jacobian simulation for each
 ##   state vector element. Specifying a value > 1 will combine state vector
 ##   elements into a single jacobian simulation.
+<<<<<<< HEAD
 NumJacobianTracers: 5
+=======
+NumJacobianTracers: 2
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ##====================================================================
 ##
@@ -184,6 +255,7 @@ PerturbValueBCs: 10.0
 ## inversions
 HourlyCH4: true
 
+<<<<<<< HEAD
 ## IMI validation
 ## Turn on ObsPack diagnostic in GEOS-Chem?
 DoObsPack: true
@@ -191,6 +263,11 @@ DoObsPack: true
 ## Turn on planeflight diagnostic in GEOS-Chem?
 ## For use in comparing GEOS-Chem against planeflight data. The path
 ## to those data must be specified in geoschem_config.yml.
+=======
+## Turn on planeflight diagnostic in GEOS-Chem?
+## For use in comparing GEOS-Chem against planeflight data. The path
+## to those data must be specified in input.geos.
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 PLANEFLIGHT: false
 
 ## Turn on old observation operators in GEOS-Chem?
@@ -205,11 +282,16 @@ AIRS: false
 ##------------------------------------------------------------------
 
 ## Path for IMI runs and output
+<<<<<<< HEAD
 OutputPath: "/scratch/mloman/gc/imi-v2.2.0/Output"
+=======
+OutputPath: "/scratch/pivatt/IMI/Output"
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ## Path to GEOS-Chem input data
 DataPath: "/scratch/mloman/data/ExtData"
 
+<<<<<<< HEAD
 ## Conda environment file
 CondaFile: "/software/miniforge3/23.3.1-1/bin/activate base"
 CondaEnv: "imi_gc_env"
@@ -221,13 +303,44 @@ RestartDownload: true
 ## Path to initial GEOS-Chem restart file + prefix
 ##   ("YYYYMMDD_0000z.nc4" will be appended)
 RestartFilePrefix: "/scratch/mloman/gc/boundary-conditions-imi/CTCH4_2025_NA/GEOSChem.BoundaryConditions."
+=======
+## Path to TROPOMI Data
+DataPathTROPOMI: "/scratch/mloman/data/tropomi_blended/ch4"
+
+## Path to ObsPack Data
+DataPathObsPack: "/scratch/ltmurray_lab/data/input/gc/ObsPack/NYS"
+
+## Conda environment file
+## See envs/README to create the Conda environment specified below
+CondaEnv: "imi_env"
+CondaFile: "/software/miniforge3/23.3.1-1/bin/activate base"
+
+## GEOS-Chem environment file (with fortran compiler, netcdf libraries, etc.)
+##   NOTE: Copy your own file in the envs/ directory within the IMI
+GEOSChemEnv: "envs/Rochester-Bluehive/GCClassic.14.4_gnu.env"
+
+## Download initial restart file from AWS S3?
+##   NOTE: Must have AWS CLI enabled
+RestartDownload: false
+
+## Path to initial GEOS-Chem restart file + prefix
+##   ("YYYYMMDD_0000z.nc4" will be appended)
+RestartFilePrefix: "/scratch/mloman/gc/boundary-conditions-imi/v2023-06/GEOSChem.BoundaryConditions."
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 
 ## Path to GEOS-Chem boundary condition files (for regional simulations)
 ## BCversion will be appended to the end of this path. ${BCpath}/${BCversion}
 BCpath: "/scratch/mloman/gc/boundary-conditions-imi"
+<<<<<<< HEAD
 BCversion: "CTCH4_2025_NA"
 
 ## Options to download missing GEOS-Chem input data from AWS S3
+=======
+BCversion: "v2023-06"
+
+## Options to download missing GEOS-Chem input data from AWS S3
+##   NOTE: Must have AWS CLI enabled
+>>>>>>> d9df655488eab9901ca902dbcca56e455b1812e0
 HemcoPriorEmisDryRun: false
 SpinupDryrun: false
 ProductionDryRun: false
