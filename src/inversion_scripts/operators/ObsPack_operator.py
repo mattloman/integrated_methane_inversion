@@ -3,7 +3,15 @@ import os
 import numpy as np
 import pandas as pd
 
+def get_std(GC_ObsPacks):
+    csv = pd.read_csv("../ObsPack_std.csv", index_col='station')
+    mapping = csv.to_dict()["sd"]
 
+    GC_ObsPacks["std"] = GC_ObsPacks["obspack_id"].astype(str)
+    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: x.strip().split("_")[0], GC_ObsPacks["std"], vectorize=True)
+    GC_ObsPacks["std"] = xr.apply_ufunc(lambda x: mapping[x], GC_ObsPacks["std"], vectorize=True)
+
+    return GC_ObsPacks["std"]
 
 def apply_obspack_operator(
     filename,
@@ -16,6 +24,7 @@ def apply_obspack_operator(
     period_i,
     config,
     use_water_obs=False,
+    csv_std=True,
 ):
     """
     Apply the averaging tropomi operator to map GEOS-Chem methane data to TROPOMI observation space.
@@ -46,18 +55,19 @@ def apply_obspack_operator(
     """
 
     # # Tempoary variables for testing
-    #filename = "../obspack_data/GEOSChem.ObsPack.20180501_0000z.nc4"
-    #config = {}
-    #period_i = 1
-    #config["RunName"] = "NY_2018"
-    #config["OutputPath"] = "../"
-    #build_jacobian = True
-    #n_elements = 261
-    #ntracers = 2
-    #config["OptimizeBCs"] = True
-    #config["PerturbValueBCs"] = 10
-
-    # Read data
+    # filename = "../obspack_data/GEOSChem.ObsPack.20180501_0000z.nc4"
+    # config = {}
+    # period_i = 1
+    # config["RunName"] = "NY_2018"
+    # config["OutputPath"] = "../"
+    # build_jacobian = True
+    # n_elements = 261
+    # ntracers = 2
+    # config["OptimizeBCs"] = True
+    # config["PerturbValueBCs"] = 10
+    # config["OptimizeBCs"] = True
+    # config["isRegional"] = True
+    # Read dataded
 
     print(f"Working up: {filename}")
 
@@ -65,6 +75,7 @@ def apply_obspack_operator(
     is_Regional = config["isRegional"]
 
     ObsPack = xr.open_dataset(filename)
+
     ObsPack_name = filename.split("/")[-1] #Would be nice to get the file name and path seperate. This is back to front.
 
     # Number of ObsPack observations
@@ -90,7 +101,7 @@ def apply_obspack_operator(
         pack = pack.rename({"CH4": f"CH4_{'base' if i == 0 else 'base_emis'}"})
         GC_ObsPacks.append(pack)
 
-    GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude"]]) # Merge the observation values.
+    GC_ObsPacks.append(ObsPack[["value", "time", "latitude", "longitude", "obspack_id"]]) # Merge the observation values.
     GC_ObsPacks = xr.merge(GC_ObsPacks)
 
     grid_lats = grid_data["lat"].values
@@ -118,6 +129,7 @@ def apply_obspack_operator(
             jacobian_ObsPack.append(pack)
 
     jacobian_ObsPack.append(ObsPack[["value", "time", "latitude", "longitude"]])
+
     jacobian_ObsPack = xr.merge(jacobian_ObsPack)
 
     # Time might want to be shifted to midpoints.
@@ -137,23 +149,20 @@ def apply_obspack_operator(
     GC_ObsPacks = GC_ObsPacks.isel(obs=nan_filter)
     jacobian_ObsPack = jacobian_ObsPack.isel(obs=nan_filter)
 
-
-    GC_ObsPacks.to_dataframe().groupby(["time","latitude","longitude"])
-    jacobian_ObsPack.to_dataframe().groupby(["time","latitude","longitude"])
-    jacobian_ObsPack.to_dataframe()
-    GC_ObsPacks.to_dataframe()
-
+    if csv_std:
+        GC_ObsPacks["std"] = get_std(GC_ObsPacks)
 
     # Average timestep. Take the average of Observations that happen in the same gridbox
     # In the same timestep. There is alot of redundancy here as the GC outputs will all be the
     # same but currently the aim is to minimise work up prior to the runs.
 
 
+    #print("jacobian_ObsPack:", jacobian_ObsPack)
+    #print("\nGC_ObsPacks:", GC_ObsPacks)
 
-    pert_jacobian_matrix = jacobian_ObsPack.to_array().values
+    pert_jacobian_matrix = jacobian_ObsPack.drop_vars(["value", "time", "latitude", "longitude"]).to_array().values
     emis_base_vector = GC_ObsPacks["CH4_base_emis"].values
     base_vector = GC_ObsPacks["CH4_base"].values
-
 
     n_obs_filtered = len(emis_base_vector)
     if build_jacobian:
@@ -171,7 +180,7 @@ def apply_obspack_operator(
 
     # Initialize array with n_gridcells rows and 5 columns. Columns are
     # TROPOMI CH4, GEOSChem CH4, longitude, latitude, observation counts
-    obs_GC = np.zeros([n_obs_filtered, 5], dtype=np.float32)
+    obs_GC = np.zeros([n_obs_filtered, 6], dtype=np.float32)
     obs_GC.fill(np.nan)
 
     # For each gridcell dict with tropomi obs:
@@ -279,6 +288,7 @@ def apply_obspack_operator(
         obs_GC[i, 2] = GC_ObsPacks["longitude"].values[i] # longitude
         obs_GC[i, 3] = GC_ObsPacks["latitude"].values[i] # latitude
         obs_GC[i, 4] = 1  # observation counts
+        obs_GC[i, 5] = GC_ObsPacks["std"].values[i]
         if obs_GC.shape[0] > 0:
             output[f"obs_GC"] = obs_GC
 
